@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isActive() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isActive', true) != false;
+    }
+    
+    function eventExists(eventId) {
+      return exists(/databases/$(database)/documents/events/$(eventId));
+    }
+    
+    function getEvent(eventId) {
+      return get(/databases/$(database)/documents/events/$(eventId)).data;
+    }
+    
+    function isEventOpen(eventId) {
+      let event = getEvent(eventId);
+      return event.status != 'cancelled' && event.get('isPublic', true) != false;
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      allow list: if true; // Public can count users for impact stats
+      allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && request.auth.uid == userId || isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // Posts collection
+    match /posts/{postId} {
+      allow read: if resource.data.isPublished == true || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Events collection
+    match /events/{eventId} {
+      allow read: if resource.data.get('isPublic', true) != false || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Event Registrations - Use composite key to prevent duplicates
+    match /eventRegistrations/{registrationId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // Create: validate userId, eventId exists, event is open, user is active
+      allow create: if isActive() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.eventId is string &&
+                       eventExists(request.resource.data.eventId) &&
+                       isEventOpen(request.resource.data.eventId) &&
+                       request.resource.data.status == 'registered' &&
+                       request.resource.data.keys().hasAll(['userId', 'eventId', 'registeredAt', 'status']);
+      
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isAdmin();
+    }
+    
+    // Impact Reports collection
+    match /impactReports/{reportId} {
+      allow read: if true; // Public can read approved reports for impact stats
+      allow create: if isActive() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+  }
+}

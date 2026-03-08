@@ -1,0 +1,20 @@
+{"users": [
+{
+  "localId": "979ZyMZ1YldvgkzUmJngznuVVKs1",
+  "email": "marvindanielfsu@gmail.com",
+  "emailVerified": true,
+  "displayName": "Marvin Daniel",
+  "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocKxo7wIP8apvTAPKPk8Jg_rWRA7zhpYnYcdMlhZ3xWIuBv7RKJO=s96-c",
+  "lastSignedInAt": "1772285129816",
+  "createdAt": "1772284814665",
+  "customAttributes": "{\"role\":\"admin\",\"admin\":true}",
+  "providerUserInfo": [
+    {
+      "providerId": "google.com",
+      "rawId": "100898930053322018745",
+      "email": "marvindanielfsu@gmail.com",
+      "displayName": "Marvin Daniel",
+      "photoUrl": "https://lh3.googleusercontent.com/a/ACg8ocKxo7wIP8apvTAPKPk8Jg_rWRA7zhpYnYcdMlhZ3xWIuBv7RKJO=s96-c"
+    }
+  ]
+}]}

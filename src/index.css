@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 1s ease-in;
+  }
+  
+  .animate-fade-in-delay {
+    animation: fadeIn 1s ease-in 0.3s both;
+  }
+  
+  .animate-fade-in-up {
+    animation: fadeInUp 1s ease-out 0.5s both;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+  
+  html {
+    @apply overflow-x-hidden;
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply overflow-x-hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  input, textarea, select {
+    font-size: 16px;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-brand-green text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-700 active:bg-green-800 transition-all shadow-md hover:shadow-lg min-h-[44px] touch-manipulation;
+  }
+  
+  .btn-secondary {
+    @apply bg-white text-brand-green border-2 border-brand-green px-6 py-3 rounded-xl font-semibold hover:bg-green-50 active:bg-green-100 transition-all min-h-[44px] touch-manipulation;
+  }
+  
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow;
+  }
+  
+  .card-glow {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-green-200 hover:shadow-lg transition-all;
+  }
+}
+
+@layer utilities {
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
