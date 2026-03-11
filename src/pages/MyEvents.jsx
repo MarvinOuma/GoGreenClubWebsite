@@ -3,6 +3,20 @@ import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firesto
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { DashboardLayout } from '../layout/DashboardLayout';
+import { Link } from 'react-router-dom';
+
+const toDateSafe = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const formatEventDate = (value) => {
+  const d = toDateSafe(value);
+  if (!d) return value ?? '';
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
+};
 
 export const MyEvents = () => {
   const { currentUser } = useAuth();
@@ -58,11 +72,22 @@ export const MyEvents = () => {
   const attendedRegs = pastRegs.filter(reg => reg.attended === true);
   const missedRegs = pastRegs.filter(reg => reg.attended === false);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-
   return (
     <DashboardLayout links={memberLinks} title="My Events">
       <div className="max-w-4xl mx-auto space-y-8">
+        {loading ? (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+              <div className="h-6 w-56 animate-pulse rounded bg-gray-100" />
+              <div className="mt-4 h-24 w-full animate-pulse rounded-xl bg-gray-100" />
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+              <div className="h-6 w-44 animate-pulse rounded bg-gray-100" />
+              <div className="mt-4 h-24 w-full animate-pulse rounded-xl bg-gray-100" />
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Upcoming Events */}
         <div>
           <h2 className="text-2xl font-bold text-brand-green mb-4">Upcoming Events ({upcomingRegs.length})</h2>
@@ -83,7 +108,7 @@ export const MyEvents = () => {
                     </div>
                     <p className="text-gray-600 text-sm mb-3">{event.description}</p>
                     <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                      <span>📅 {event.date}</span>
+                      <span>📅 {formatEventDate(event.date)}</span>
                       <span>📍 {event.location}</span>
                       {event.pointsReward && <span className="text-brand-green font-semibold">🏆 +{event.pointsReward} points</span>}
                     </div>
@@ -111,7 +136,7 @@ export const MyEvents = () => {
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                      <span>📅 {event.date}</span>
+                      <span>📅 {formatEventDate(event.date)}</span>
                       {reg.pointsAwarded && <span className="text-brand-green font-semibold">+{reg.pointsAwarded} points earned</span>}
                     </div>
                   </div>
@@ -137,7 +162,7 @@ export const MyEvents = () => {
                         Missed
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600">📅 {event.date}</p>
+                    <p className="text-sm text-gray-600">📅 {formatEventDate(event.date)}</p>
                   </div>
                 );
               })}
@@ -148,8 +173,10 @@ export const MyEvents = () => {
         {registrations.length === 0 && (
           <div className="text-center py-12">
             <p className="text-gray-500 mb-4">You haven't registered for any events yet</p>
-            <a href="/events" className="btn-primary inline-block">Browse Events</a>
+            <Link to="/events" className="btn-primary inline-block">Browse Events</Link>
           </div>
+        )}
+          </>
         )}
       </div>
     </DashboardLayout>

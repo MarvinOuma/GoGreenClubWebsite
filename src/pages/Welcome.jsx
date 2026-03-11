@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/ui/ToastProvider';
 
 export const Welcome = () => {
   const { currentUser } = useAuth();
+  const toast = useToast();
   const [name, setName] = useState('');
   const [branch, setBranch] = useState('');
   const [interests, setInterests] = useState('');
@@ -17,7 +19,10 @@ export const Welcome = () => {
       await setDoc(doc(db, 'users', currentUser.uid), {
         name,
         branch,
-        interests: interests.split(',').map(i => i.trim()),
+        interests: interests
+          .split(',')
+          .map((i) => i.trim())
+          .filter(Boolean),
         email: currentUser.email,
         greenPoints: 0,
         createdAt: new Date(),
@@ -26,6 +31,7 @@ export const Welcome = () => {
       navigate('/member');
     } catch (err) {
       console.error(err);
+      toast.error('Setup failed', err?.message ?? 'Please try again.');
     }
   };
 
@@ -44,7 +50,7 @@ export const Welcome = () => {
             placeholder="Full Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-green"
+            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
             required
           />
           <input
@@ -52,7 +58,7 @@ export const Welcome = () => {
             placeholder="Branch/Department"
             value={branch}
             onChange={(e) => setBranch(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-green"
+            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
             required
           />
           <input
@@ -60,7 +66,7 @@ export const Welcome = () => {
             placeholder="Interests (comma separated)"
             value={interests}
             onChange={(e) => setInterests(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-green"
+            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
             required
           />
           <button type="submit" className="w-full btn-primary">

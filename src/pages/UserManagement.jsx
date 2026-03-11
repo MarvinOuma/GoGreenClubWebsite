@@ -5,9 +5,12 @@ import { db, functions } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { DashboardLayout } from '../layout/DashboardLayout';
 import { UserDetailsDrawer } from '../components/UserDetailsDrawer';
+import { useToast } from '../components/ui/ToastProvider';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
 export const UserManagement = () => {
   const { currentUser } = useAuth();
+  const toast = useToast();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -16,6 +19,7 @@ export const UserManagement = () => {
   const [sortBy, setSortBy] = useState('date');
   const [selectedUser, setSelectedUser] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [confirmState, setConfirmState] = useState(null); // { title, description, confirmLabel, tone, action: fn }
 
   const adminLinks = [
     { path: '/admin', label: 'Overview' },
@@ -23,6 +27,8 @@ export const UserManagement = () => {
     { path: '/admin/users', label: 'User Management' },
     { path: '/admin/reports', label: 'Approval Queue' },
     { path: '/admin/blog', label: 'Blog CMS' },
+    { path: '/admin/partners', label: 'Partners' },
+    { path: '/admin/messages', label: 'Partner Inbox' },
   ];
 
   useEffect(() => {
@@ -79,54 +85,81 @@ export const UserManagement = () => {
   }, [users, searchTerm, roleFilter, statusFilter, sortBy]);
 
   const handleRoleChange = async (userId, newRole) => {
-    if (!confirm(`Change user role to ${newRole}?`)) return;
-    
     try {
       // Call the Cloud Function to update custom claims in Firebase Auth
       const updateUserRole = httpsCallable(functions, 'updateUserRole');
       await updateUserRole({ userId, role: newRole });
       
-      alert(`Role updated to ${newRole}. User must logout and login again to see changes.`);
+      toast.success('Role updated', `Set to ${newRole}. User must logout/login to see changes.`);
       fetchUsers();
       setDrawerOpen(false);
     } catch (error) {
       console.error('Error updating role:', error);
-      alert('Failed to update role');
+      toast.error('Update failed', 'Failed to update role. Please try again.');
     }
   };
 
   const handleStatusChange = async (userId, isActive) => {
-    if (!confirm(`${isActive ? 'Enable' : 'Disable'} this account?`)) return;
-    
     try {
       // Call the Cloud Function to enable/disable user
       const updateUserStatus = httpsCallable(functions, isActive ? 'enableUser' : 'disableUser');
       await updateUserStatus({ userId });
       
-      alert(`Account ${isActive ? 'enabled' : 'disabled'} successfully`);
+      toast.success('Account updated', `Account ${isActive ? 'enabled' : 'disabled'} successfully.`);
       fetchUsers();
       setDrawerOpen(false);
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Failed to update status');
+      toast.error('Update failed', 'Failed to update account status. Please try again.');
     }
   };
 
   const handleDelete = async (userId) => {
-    if (!confirm('Delete this user permanently? This cannot be undone!')) return;
-    
     try {
       // Call the Cloud Function to delete user
       const deleteUserFn = httpsCallable(functions, 'deleteUser');
       await deleteUserFn({ userId });
       
-      alert('User deleted successfully');
+      toast.success('User deleted', 'User deleted successfully.');
       fetchUsers();
       setDrawerOpen(false);
     } catch (error) {
       console.error('Error deleting user:', error);
-      alert('Failed to delete user');
+      toast.error('Delete failed', 'Failed to delete user. Please try again.');
     }
+  };
+
+  const requestRoleChange = (userId, newRole) => {
+    const u = users.find((x) => x.id === userId);
+    setConfirmState({
+      title: `Change role to ${newRole}?`,
+      description: `This will update ${u?.name ?? 'this user'} to role “${newRole}”. The user must logout/login to see claim changes.`,
+      confirmLabel: 'Confirm',
+      tone: 'primary',
+      action: () => handleRoleChange(userId, newRole),
+    });
+  };
+
+  const requestStatusChange = (userId, isActive) => {
+    const u = users.find((x) => x.id === userId);
+    setConfirmState({
+      title: `${isActive ? 'Enable' : 'Disable'} this account?`,
+      description: `${u?.name ?? 'This user'} will be ${isActive ? 'enabled' : 'disabled'}.`,
+      confirmLabel: isActive ? 'Enable' : 'Disable',
+      tone: isActive ? 'primary' : 'danger',
+      action: () => handleStatusChange(userId, isActive),
+    });
+  };
+
+  const requestDelete = (userId) => {
+    const u = users.find((x) => x.id === userId);
+    setConfirmState({
+      title: 'Delete this user?',
+      description: `This will permanently delete ${u?.name ?? 'this user'}. This action cannot be undone.`,
+      confirmLabel: 'Delete user',
+      tone: 'danger',
+      action: () => handleDelete(userId),
+    });
   };
 
   const openUserDetails = (user) => {
@@ -138,33 +171,50 @@ export const UserManagement = () => {
     <DashboardLayout links={adminLinks} title="User Management">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold text-brand-green">Users ({filteredAndSortedUsers.length})</h1>
+          <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm w-full">
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">
+              Users <span className="text-gray-400">({filteredAndSortedUsers.length})</span>
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">Search, filter, and manage roles and account status.</p>
+          </div>
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <input
               type="text"
               placeholder="Search by name or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="px-4 py-2 border rounded-xl"
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
             />
             
-            <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="px-4 py-2 border rounded-xl">
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            >
               <option value="all">All Roles</option>
               <option value="member">Member</option>
               <option value="admin">Admin</option>
             </select>
 
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2 border rounded-xl">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            >
               <option value="all">All Status</option>
               <option value="active">Active</option>
               <option value="disabled">Disabled</option>
             </select>
 
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="px-4 py-2 border rounded-xl">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            >
               <option value="date">Sort by Date</option>
               <option value="points">Sort by Points</option>
               <option value="role">Sort by Role</option>
@@ -174,21 +224,28 @@ export const UserManagement = () => {
 
         {/* User List */}
         {loading ? (
-          <p>Loading users...</p>
+          <div className="space-y-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                <div className="h-4 w-40 animate-pulse rounded bg-gray-100" />
+                <div className="mt-3 h-3 w-56 animate-pulse rounded bg-gray-100" />
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="space-y-4">
             {filteredAndSortedUsers.map(user => (
               <div 
                 key={user.id} 
                 onClick={() => openUserDetails(user)}
-                className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-all cursor-pointer"
+                className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-bold text-brand-green">{user.name}</h3>
+                      <h3 className="text-lg font-extrabold tracking-tight text-gray-900">{user.name}</h3>
                       {user.isActive === false && (
-                        <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">Disabled</span>
+                        <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-full">Disabled</span>
                       )}
                     </div>
                     <p className="text-sm text-gray-600">{user.email}</p>
@@ -199,7 +256,7 @@ export const UserManagement = () => {
                     <span className={`px-4 py-2 rounded-xl text-sm font-medium ${
                       user.role === 'admin' 
                         ? 'bg-purple-100 text-purple-700' 
-                        : 'bg-green-100 text-brand-green'
+                        : 'bg-emerald-100 text-emerald-800'
                     }`}>
                       {user.role || 'member'}
                     </span>
@@ -218,10 +275,24 @@ export const UserManagement = () => {
         user={selectedUser}
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        onRoleChange={handleRoleChange}
-        onStatusChange={handleStatusChange}
-        onDelete={handleDelete}
+        onRequestRoleChange={requestRoleChange}
+        onRequestStatusChange={requestStatusChange}
+        onRequestDelete={requestDelete}
         currentAdminId={currentUser?.uid}
+      />
+
+      <ConfirmDialog
+        open={!!confirmState}
+        title={confirmState?.title ?? ''}
+        description={confirmState?.description ?? ''}
+        confirmLabel={confirmState?.confirmLabel ?? 'Confirm'}
+        tone={confirmState?.tone ?? 'danger'}
+        onCancel={() => setConfirmState(null)}
+        onConfirm={async () => {
+          const action = confirmState?.action;
+          setConfirmState(null);
+          await action?.();
+        }}
       />
     </DashboardLayout>
   );

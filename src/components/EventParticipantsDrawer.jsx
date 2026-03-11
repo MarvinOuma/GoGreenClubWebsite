@@ -1,10 +1,23 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, getDoc, increment } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
+import { useToast } from './ui/ToastProvider';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+
+const formatDate = (value) => {
+  if (!value) return '';
+  const d = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
+  return Number.isNaN(d.getTime())
+    ? ''
+    : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
+};
 
 export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) => {
+  const toast = useToast();
   const [participants, setParticipants] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [confirmRemoveId, setConfirmRemoveId] = useState('');
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     if (isOpen && event) {
@@ -17,23 +30,49 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
     try {
       const q = query(collection(db, 'eventRegistrations'), where('eventId', '==', event.id));
       const snapshot = await getDocs(q);
-      
+
+      // Dedupe by userId (legacy data may include duplicates).
+      const regs = snapshot.docs.map((regDoc) => ({ id: regDoc.id, ...regDoc.data() }));
+      regs.sort((a, b) => {
+        const at = a?.registeredAt?.toDate?.() ? a.registeredAt.toDate().getTime() : new Date(a?.registeredAt ?? 0).getTime();
+        const bt = b?.registeredAt?.toDate?.() ? b.registeredAt.toDate().getTime() : new Date(b?.registeredAt ?? 0).getTime();
+        return bt - at;
+      });
+
+      const byUser = new Map();
+      for (const r of regs) {
+        if (!r?.userId) continue;
+        if (!byUser.has(r.userId)) byUser.set(r.userId, r);
+      }
+
+      const uniqueRegs = Array.from(byUser.values());
       const participantsData = await Promise.all(
-        snapshot.docs.map(async (regDoc) => {
-          const reg = { id: regDoc.id, ...regDoc.data() };
+        uniqueRegs.map(async (reg) => {
           const userDoc = await getDoc(doc(db, 'users', reg.userId));
-          return {
-            ...reg,
-            user: userDoc.exists() ? userDoc.data() : null
-          };
+          return { ...reg, user: userDoc.exists() ? userDoc.data() : null };
         })
       );
-      
+
       setParticipants(participantsData);
     } catch (error) {
       console.error('Error fetching participants:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const syncRegisteredCount = async () => {
+    if (!event?.id) return;
+    setSyncing(true);
+    try {
+      await updateDoc(doc(db, 'events', event.id), { registeredCount: participants.length });
+      toast.success('Synced', 'Event registered count updated.');
+      onUpdate?.();
+    } catch (error) {
+      console.error('Error syncing registeredCount:', error);
+      toast.error('Sync failed', 'Unable to sync event registered count. Please try again.');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -49,29 +88,27 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
       }
       
       await updateDoc(doc(db, 'eventRegistrations', regId), updates);
-      alert(`Attendance marked as ${attended ? 'attended' : 'absent'}`);
+      toast.success('Attendance updated', `Marked as ${attended ? 'attended' : 'absent'}.`);
       fetchParticipants();
       onUpdate?.();
     } catch (error) {
       console.error('Error marking attendance:', error);
-      alert('Failed to mark attendance');
+      toast.error('Update failed', 'Failed to mark attendance. Please try again.');
     }
   };
 
   const removeParticipant = async (regId) => {
-    if (!confirm('Remove this participant?')) return;
-    
     try {
       await deleteDoc(doc(db, 'eventRegistrations', regId));
       await updateDoc(doc(db, 'events', event.id), {
         registeredCount: increment(-1)
       });
-      alert('Participant removed');
+      toast.success('Removed', 'Participant removed.');
       fetchParticipants();
       onUpdate?.();
     } catch (error) {
       console.error('Error removing participant:', error);
-      alert('Failed to remove participant');
+      toast.error('Remove failed', 'Failed to remove participant. Please try again.');
     }
   };
 
@@ -83,17 +120,34 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
       <div className="fixed right-0 top-0 h-full w-full md:w-[500px] bg-white shadow-2xl z-50 overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-brand-green">Participants</h2>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div>
+              <h2 className="text-2xl font-bold text-brand-green">Participants</h2>
+              {typeof event?.registeredCount === 'number' && event.registeredCount !== participants.length ? (
+                <p className="mt-1 text-xs font-semibold text-amber-700">
+                  Count mismatch: event shows {event.registeredCount}, registrations show {participants.length}.
+                </p>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={syncRegisteredCount}
+                disabled={syncing}
+                className="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition disabled:opacity-60"
+              >
+                {syncing ? 'Syncing…' : 'Sync Count'}
+              </button>
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" aria-label="Close participants">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="mb-4">
             <h3 className="font-bold text-lg">{event.title}</h3>
-            <p className="text-sm text-gray-500">📅 {event.date}</p>
+            <p className="text-sm text-gray-500">📅 {formatDate(event.date)}</p>
             <p className="text-sm text-gray-600 mt-2">
               {participants.length} registered / {event.maxParticipants || '∞'} max
             </p>
@@ -145,7 +199,7 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
                   )}
 
                   <button
-                    onClick={() => removeParticipant(p.id)}
+                    onClick={() => setConfirmRemoveId(p.id)}
                     className="w-full px-3 py-2 bg-red-500 text-white rounded-lg text-sm font-semibold"
                   >
                     Remove
@@ -156,6 +210,20 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmRemoveId}
+        title="Remove this participant?"
+        description="This will delete their registration and decrement the event’s registered count."
+        confirmLabel="Remove"
+        tone="danger"
+        onCancel={() => setConfirmRemoveId('')}
+        onConfirm={async () => {
+          const id = confirmRemoveId;
+          setConfirmRemoveId('');
+          await removeParticipant(id);
+        }}
+      />
     </>
   );
 };

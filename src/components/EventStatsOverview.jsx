@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 
 export const EventStatsOverview = () => {
@@ -19,17 +19,29 @@ export const EventStatsOverview = () => {
     try {
       const eventsSnap = await getDocs(collection(db, 'events'));
       const events = eventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const eventsById = new Map(events.map((e) => [e.id, e]));
       
       const now = new Date();
       const upcoming = events.filter(e => e.status === 'upcoming' || (new Date(e.date) >= now && !e.status));
       const completed = events.filter(e => e.status === 'completed' || (new Date(e.date) < now && e.status !== 'cancelled'));
       
       const regsSnap = await getDocs(collection(db, 'eventRegistrations'));
-      const registrations = regsSnap.docs.map(doc => doc.data());
+      const unique = new Map(); // key: userId_eventId -> reg
+      regsSnap.docs.forEach((d) => {
+        const r = d.data();
+        if (!r?.userId || !r?.eventId) return;
+        if (!eventsById.has(r.eventId)) return; // ignore orphan/legacy regs
+        const key = `${r.userId}_${r.eventId}`;
+        const prev = unique.get(key);
+        const prevTs = prev?.registeredAt?.toDate?.() ? prev.registeredAt.toDate().getTime() : new Date(prev?.registeredAt ?? 0).getTime();
+        const nextTs = r?.registeredAt?.toDate?.() ? r.registeredAt.toDate().getTime() : new Date(r?.registeredAt ?? 0).getTime();
+        if (!prev || nextTs > prevTs) unique.set(key, r);
+      });
+      const registrations = Array.from(unique.values());
       
       const attended = registrations.filter(r => r.attended === true).length;
       const eligible = registrations.filter(r => {
-        const event = events.find(e => e.id === r.eventId);
+        const event = eventsById.get(r.eventId);
         return event && new Date(event.date) < now;
       }).length;
       

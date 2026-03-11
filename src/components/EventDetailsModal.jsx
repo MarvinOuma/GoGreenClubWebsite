@@ -1,7 +1,36 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useToast } from './ui/ToastProvider';
+
+const toDateSafe = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const formatEventDate = (value) => {
+  const d = toDateSafe(value);
+  if (!d) return value ?? '';
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
+};
 
 export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregister, isRegistered, currentUserId }) => {
   const [loading, setLoading] = useState(false);
+  const toast = useToast();
+  const navigate = useNavigate();
+  const eventId = event?.id ?? '';
+
+  // Hooks must be called unconditionally. Compute shareUrl even when modal is closed.
+  const shareUrl = useMemo(() => {
+    if (!eventId) return '';
+    try {
+      const base = window.location.origin;
+      return `${base}/events?event=${encodeURIComponent(eventId)}`;
+    } catch {
+      return `/events?event=${encodeURIComponent(eventId)}`;
+    }
+  }, [eventId]);
 
   if (!isOpen || !event) return null;
 
@@ -9,7 +38,9 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
   const isFull = event.maxParticipants && spotsLeft <= 0;
   const isPast = new Date(event.date) < new Date();
   const isDeadlinePassed = event.registrationDeadline && new Date(event.registrationDeadline) < new Date();
-  const canRegister = !isRegistered && !isFull && !isPast && !isDeadlinePassed && currentUserId;
+  const canRegisterBase = !isRegistered && !isFull && !isPast && !isDeadlinePassed;
+  const needsAuth = !currentUserId;
+  const canClickRegister = canRegisterBase && !loading;
 
   const handleRegister = async () => {
     setLoading(true);
@@ -21,6 +52,34 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
     setLoading(true);
     await onUnregister(event.id);
     setLoading(false);
+  };
+
+  const copyShareLink = async () => {
+    try {
+      if (!shareUrl) {
+        toast.error('Copy failed', 'Unable to create a share link for this event.');
+        return;
+      }
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success('Link copied', 'Share it with your friends.');
+        return;
+      }
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = shareUrl;
+      ta.setAttribute('readonly', 'true');
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      toast.success('Link copied', 'Share it with your friends.');
+    } catch (e) {
+      console.error('Copy link failed:', e);
+      toast.error('Copy failed', 'Please copy the URL from the address bar.');
+    }
   };
 
   return (
@@ -39,11 +98,21 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
                   {event.category?.toUpperCase() || 'EVENT'}
                 </span>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={copyShareLink}
+                  className="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition"
+                  aria-label="Copy event link"
+                >
+                  Copy Link
+                </button>
+                <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" aria-label="Close">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -55,7 +124,7 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm text-gray-500">Date</label>
-                  <p className="font-semibold">📅 {event.date}</p>
+                  <p className="font-semibold">📅 {formatEventDate(event.date)}</p>
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">Location</label>
@@ -65,7 +134,7 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
                   <div className="col-span-2">
                     <label className="text-sm text-gray-500">Registration Deadline</label>
                     <p className={`font-semibold ${isDeadlinePassed ? 'text-red-500' : ''}`}>
-                      ⏰ {event.registrationDeadline} {isDeadlinePassed && '(Passed)'}
+                      ⏰ {formatEventDate(event.registrationDeadline)} {isDeadlinePassed && '(Passed)'}
                     </p>
                   </div>
                 )}
@@ -126,16 +195,41 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
                       </button>
                     </>
                   ) : (
-                    <button 
-                      onClick={handleRegister} 
-                      disabled={!canRegister || loading}
-                      className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {loading ? 'Processing...' : 
-                       isFull ? 'Event Full' : 
-                       isDeadlinePassed ? 'Registration Closed' : 
-                       'Register for Event'}
-                    </button>
+                    <>
+                      {needsAuth && canRegisterBase ? (
+                        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-center">
+                          <p className="text-sm font-semibold text-emerald-800">
+                            You need an account to register for this event.
+                          </p>
+                          <p className="mt-1 text-xs text-emerald-800/80">Log in or sign up to reserve your spot.</p>
+                        </div>
+                      ) : null}
+
+                      <button
+                        onClick={() => {
+                          if (!canRegisterBase) return;
+                          if (needsAuth) {
+                            toast.info('Account required', 'Please log in or sign up to register for events.');
+                            onClose?.();
+                            navigate('/login');
+                            return;
+                          }
+                          handleRegister();
+                        }}
+                        disabled={!canClickRegister}
+                        className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loading
+                          ? 'Processing...'
+                          : isFull
+                            ? 'Event Full'
+                            : isDeadlinePassed
+                              ? 'Registration Closed'
+                              : needsAuth
+                                ? 'Login to Register'
+                                : 'Register for Event'}
+                      </button>
+                    </>
                   )}
                 </div>
               )}

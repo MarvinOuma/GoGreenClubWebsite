@@ -3,9 +3,11 @@ import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { DashboardLayout } from '../layout/DashboardLayout';
+import { useToast } from '../components/ui/ToastProvider';
 
 export const MemberActivities = () => {
   const { currentUser } = useAuth();
+  const toast = useToast();
   const [activities, setActivities] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ activityType: '', wasteAmount: '', treesPlanted: '', description: '' });
@@ -38,10 +40,10 @@ export const MemberActivities = () => {
       setFormData({ activityType: '', wasteAmount: '', treesPlanted: '', description: '' });
       setShowForm(false);
       fetchActivities();
-      alert('Activity submitted for approval!');
+      toast.success('Submitted', 'Activity submitted for approval.');
     } catch (error) {
       console.error('Error submitting activity:', error);
-      alert('Failed to submit activity');
+      toast.error('Submit failed', 'Please try again.');
     }
   };
 
@@ -58,16 +60,40 @@ export const MemberActivities = () => {
         {showForm && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
             <form onSubmit={handleSubmit} className="space-y-4">
-              <select value={formData.activityType} onChange={(e) => setFormData({...formData, activityType: e.target.value})} className="w-full px-4 py-3 border rounded-xl" required>
+              <select
+                value={formData.activityType}
+                onChange={(e) => setFormData({ ...formData, activityType: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                required
+              >
                 <option value="">Select Activity Type</option>
                 <option value="recycling">Recycling</option>
                 <option value="tree_planting">Tree Planting</option>
                 <option value="cleanup">Cleanup Drive</option>
                 <option value="other">Other</option>
               </select>
-              <input type="number" placeholder="Waste Collected (kg)" value={formData.wasteAmount} onChange={(e) => setFormData({...formData, wasteAmount: e.target.value})} className="w-full px-4 py-3 border rounded-xl" />
-              <input type="number" placeholder="Trees Planted" value={formData.treesPlanted} onChange={(e) => setFormData({...formData, treesPlanted: e.target.value})} className="w-full px-4 py-3 border rounded-xl" />
-              <textarea placeholder="Description" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full px-4 py-3 border rounded-xl h-32" required />
+              <input
+                type="number"
+                placeholder="Waste Collected (kg)"
+                value={formData.wasteAmount}
+                onChange={(e) => setFormData({ ...formData, wasteAmount: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+              />
+              <input
+                type="number"
+                placeholder="Trees Planted"
+                value={formData.treesPlanted}
+                onChange={(e) => setFormData({ ...formData, treesPlanted: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+              />
+              <textarea
+                placeholder="Description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                rows={6}
+                required
+              />
               <button type="submit" className="w-full btn-primary">Submit Activity</button>
             </form>
           </div>

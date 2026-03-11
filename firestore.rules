@@ -72,5 +72,31 @@ service cloud.firestore {
       allow create: if isActive() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
+
+    // Partners (logos shown on home page)
+    match /partners/{partnerId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Partner inquiries (public can create; admins can read/manage)
+    match /partnerMessages/{messageId} {
+      allow read: if isAdmin();
+
+      allow create: if
+        request.resource.data.keys().hasAll(['name', 'email', 'organization', 'message', 'status', 'createdAt']) &&
+        request.resource.data.name is string &&
+        request.resource.data.email is string &&
+        request.resource.data.organization is string &&
+        request.resource.data.message is string &&
+        request.resource.data.status == 'new' &&
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.name.size() <= 80 &&
+        request.resource.data.email.size() <= 200 &&
+        request.resource.data.organization.size() <= 120 &&
+        request.resource.data.message.size() <= 2000;
+
+      allow update, delete: if isAdmin();
+    }
   }
 }

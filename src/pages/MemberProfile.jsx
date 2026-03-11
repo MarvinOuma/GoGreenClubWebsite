@@ -3,9 +3,11 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { DashboardLayout } from '../layout/DashboardLayout';
+import { useToast } from '../components/ui/ToastProvider';
 
 export const MemberProfile = () => {
   const { currentUser } = useAuth();
+  const toast = useToast();
   const [formData, setFormData] = useState({ name: '', branch: '', interests: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,12 +42,15 @@ export const MemberProfile = () => {
       await setDoc(doc(db, 'users', currentUser.uid), {
         name: formData.name,
         branch: formData.branch,
-        interests: formData.interests.split(',').map(i => i.trim())
+        interests: formData.interests
+          .split(',')
+          .map((i) => i.trim())
+          .filter(Boolean),
       }, { merge: true });
-      alert('Profile updated successfully!');
+      toast.success('Profile updated', 'Your changes were saved.');
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Failed to update profile');
+      toast.error('Save failed', 'Please try again.');
     } finally {
       setSaving(false);
     }
@@ -61,15 +66,33 @@ export const MemberProfile = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-semibold mb-2">Full Name</label>
-              <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 border rounded-xl" required />
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                required
+              />
             </div>
             <div>
               <label className="block text-sm font-semibold mb-2">Branch/Department</label>
-              <input type="text" value={formData.branch} onChange={(e) => setFormData({...formData, branch: e.target.value})} className="w-full px-4 py-3 border rounded-xl" required />
+              <input
+                type="text"
+                value={formData.branch}
+                onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                required
+              />
             </div>
             <div>
               <label className="block text-sm font-semibold mb-2">Interests (comma separated)</label>
-              <input type="text" value={formData.interests} onChange={(e) => setFormData({...formData, interests: e.target.value})} className="w-full px-4 py-3 border rounded-xl" required />
+              <input
+                type="text"
+                value={formData.interests}
+                onChange={(e) => setFormData({ ...formData, interests: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                required
+              />
             </div>
             <button type="submit" disabled={saving} className="w-full btn-primary">
               {saving ? 'Saving...' : 'Save Changes'}
