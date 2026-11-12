@@ -449,6 +449,37 @@ export const PublicDashboard = () => {
       </Section>
 
       {/* Get Involved */}
+      <Section
+        title="Support GoGreen Club"
+        subtitle="Your contribution helps us run cleanups, workshops, and community environmental projects."
+      >
+        <div className="mx-auto max-w-2xl rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-xl" aria-hidden="true">
+              🌱
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-500">Bank transfer</p>
+              <h3 className="text-xl font-extrabold text-gray-900">KCB Bank</h3>
+            </div>
+          </div>
+          <dl className="mt-6 grid gap-4 rounded-2xl bg-gray-50 p-5 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Account name</dt>
+              <dd className="mt-1 font-bold text-gray-900">Veronica Samson Eunice JA</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Account number</dt>
+              <dd className="mt-1 font-bold tracking-wide text-gray-900">1346825661</dd>
+            </div>
+          </dl>
+          <p className="mt-4 text-sm leading-relaxed text-gray-600">
+            Thank you for helping grow a greener community. Please use “GoGreen Club donation” as your transfer reference.
+          </p>
+        </div>
+      </Section>
+
+      {/* Get Involved */}
       <Section title="Get Involved">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <InvolvedCard

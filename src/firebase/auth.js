@@ -25,48 +25,44 @@ export const logout = () => {
   return signOut(auth);
 };
 
-export const getUserRole = async (user) => {
+export const getAuthProfile = async (user, options = {}) => {
+  const { forceRefresh = false } = options;
+
   try {
-    const tokenResult = await user.getIdTokenResult();
-    const claimRole = tokenResult.claims.role;
-    
-    // If custom claim exists, use it
-    if (claimRole) {
-      return claimRole;
-    }
-    
-    // Fallback: Check Firestore if custom claim not set
+    const tokenResult = await user.getIdTokenResult(forceRefresh);
+    const claims = tokenResult?.claims ?? {};
+    const claimRole = typeof claims.role === 'string' ? claims.role : null;
+    const hasAdminClaim = claims.admin === true;
+
+    let profileRole = 'member';
     const userDoc = await getDoc(doc(db, 'users', user.uid));
     if (userDoc.exists()) {
-      return userDoc.data().role || 'member';
+      profileRole = userDoc.data().role || 'member';
     }
-    
-    return 'member';
+
+    return {
+      claims,
+      hasAdminClaim,
+      profileRole,
+      role: claimRole || profileRole || 'member',
+    };
   } catch (error) {
-    console.error('Error getting user role:', error);
-    return 'member';
+    console.error('Error getting auth profile:', error);
+    return {
+      claims: {},
+      hasAdminClaim: false,
+      profileRole: 'member',
+      role: 'member',
+    };
   }
 };
 
-export const isAdmin = async (user) => {
-  try {
-    const tokenResult = await user.getIdTokenResult();
-    const isAdminClaim = tokenResult.claims.admin === true;
-    
-    // If custom claim exists and is true, use it
-    if (isAdminClaim) {
-      return true;
-    }
-    
-    // Fallback: Check Firestore if custom claim not set
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    if (userDoc.exists()) {
-      return userDoc.data().role === 'admin';
-    }
-    
-    return false;
-  } catch (error) {
-    console.error('Error checking admin status:', error);
-    return false;
-  }
+export const getUserRole = async (user, options) => {
+  const profile = await getAuthProfile(user, options);
+  return profile.role;
+};
+
+export const isAdmin = async (user, options) => {
+  const profile = await getAuthProfile(user, options);
+  return profile.hasAdminClaim;
 };

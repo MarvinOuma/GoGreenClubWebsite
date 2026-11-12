@@ -23,11 +23,7 @@ export const Welcome = () => {
           .split(',')
           .map((i) => i.trim())
           .filter(Boolean),
-        email: currentUser.email,
-        greenPoints: 0,
-        createdAt: new Date(),
-        role: 'member'
-      });
+      }, { merge: true });
       navigate('/member');
     } catch (err) {
       console.error(err);

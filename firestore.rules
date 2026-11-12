@@ -9,6 +9,10 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
+
+    function isOwnUser(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
     
     function isActive() {
       return isAuthenticated() && 
@@ -27,13 +31,25 @@ service cloud.firestore {
       let event = getEvent(eventId);
       return event.status != 'cancelled' && event.get('isPublic', true) != false;
     }
+
+    function isValidProfilePayload() {
+      return request.resource.data.name is string &&
+             request.resource.data.branch is string &&
+             request.resource.data.interests is list &&
+             request.resource.data.interests.size() <= 25;
+    }
     
     // Users collection
     match /users/{userId} {
       allow list: if true; // Public can count users for impact stats
       allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isAuthenticated() && request.auth.uid == userId || isAdmin();
+      allow create: if isOwnUser(userId) &&
+                       request.resource.data.keys().hasOnly(['name', 'branch', 'interests']) &&
+                       isValidProfilePayload();
+      allow update: if (isOwnUser(userId) &&
+                          request.resource.data.diff(resource.data).changedKeys().hasOnly(['name', 'branch', 'interests']) &&
+                          isValidProfilePayload()) ||
+                        isAdmin();
       allow delete: if isAdmin();
     }
     

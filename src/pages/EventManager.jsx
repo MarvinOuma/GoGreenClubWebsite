@@ -128,10 +128,10 @@ export const EventManager = () => {
       toast.success('Saved', editingId ? 'Event updated.' : 'Event created.');
     } catch (error) {
       console.error('Error saving event:', error);
-      if (error?.code === 'permission-denied') {
+      if (error?.code === 'permission-denied' || error?.code === 'storage/unauthorized') {
         toast.error(
-          'Save blocked by permissions',
-          'Your account may be missing the admin claim. Try logging out/in, then retry. If it still fails, update admin claims in Firebase Auth.'
+          'Admin claim required',
+          'This action is allowed only for Firebase Auth users with the admin claim. Sign out and back in to refresh claims. If it still fails, update the user through the `updateUserRole` Cloud Function or Firebase Admin SDK.'
         );
       }
       toast.error(

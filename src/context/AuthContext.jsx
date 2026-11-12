@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase/firebaseConfig';
-import { getUserRole, isAdmin } from '../firebase/auth';
+import { getAuthProfile } from '../firebase/auth';
 
 const AuthContext = createContext();
 
@@ -17,10 +17,9 @@ export const AuthProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
-        const role = await getUserRole(user);
-        const adminStatus = await isAdmin(user);
-        setUserRole(role);
-        setIsAdminUser(adminStatus);
+        const profile = await getAuthProfile(user, { forceRefresh: true });
+        setUserRole(profile.role);
+        setIsAdminUser(profile.hasAdminClaim);
       } else {
         setUserRole(null);
         setIsAdminUser(false);
