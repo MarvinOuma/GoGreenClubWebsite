@@ -1,7 +1,8 @@
+import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
 import { callFunction } from '../firebase/callable';
 import { useEffect, useMemo, useState } from 'react';
 import { collection, addDoc, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { imageAccept, uploadImage } from '../firebase/images';
+import { discardUpload, imageAccept, uploadImage } from '../firebase/images';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { DashboardLayout } from '../layout/DashboardLayout';
@@ -10,17 +11,10 @@ import { EventParticipantsDrawer } from '../components/EventParticipantsDrawer';
 import { useToast } from '../components/ui/ToastProvider';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
-const toDateSafe = (value) => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
 
-const formatEventDate = (value) => {
-  const d = toDateSafe(value);
-  if (!d) return value ?? '';
-  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(d);
+const formatInputDate = value => {
+  const date = eventDate(value, false);
+  return date ? new Intl.DateTimeFormat('sv-SE', { timeZone: 'Africa/Nairobi' }).format(date) : '';
 };
 
 export const EventManager = () => {
@@ -76,8 +70,8 @@ export const EventManager = () => {
       const snapshot = await getDocs(collection(db, 'events'));
       const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       eventsData.sort((a, b) => {
-        const ad = toDateSafe(a?.createdAt?.toDate?.() || a?.createdAt)?.getTime?.() ?? 0;
-        const bd = toDateSafe(b?.createdAt?.toDate?.() || b?.createdAt)?.getTime?.() ?? 0;
+        const ad = eventDate(a?.createdAt?.toDate?.() || a?.createdAt)?.getTime?.() ?? 0;
+        const bd = eventDate(b?.createdAt?.toDate?.() || b?.createdAt)?.getTime?.() ?? 0;
         return bd - ad;
       });
       setEvents(eventsData);
@@ -91,23 +85,25 @@ export const EventManager = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
-    
+
+    let uploaded;
     try {
       let imageUrl = formData.imageUrl;
-      
+
       if (imageFile) {
-        const uploaded = await uploadImage('events', imageFile);
+        uploaded = await uploadImage('events', imageFile);
         imageUrl = uploaded.url;
       }
-      
+
       const eventData = {
         ...formData,
         maxParticipants: formData.maxParticipants ? parseInt(formData.maxParticipants) : null,
         pointsReward: formData.pointsReward ? parseInt(formData.pointsReward) : null,
         imageUrl,
-        status: new Date(formData.date) >= new Date() ? 'upcoming' : 'completed'
+        ...(uploaded ? { imagePath: uploaded.path } : {}),
+        status: editingId ? (events.find(event => event.id === editingId)?.status ?? 'upcoming') : 'upcoming'
       };
-      
+
       if (editingId) {
         await updateDoc(doc(db, 'events', editingId), eventData);
       } else {
@@ -118,7 +114,8 @@ export const EventManager = () => {
           createdBy: currentUser.uid
         });
       }
-      
+
+      uploaded = undefined;
       setFormData({ title: '', description: '', date: '', location: '', category: 'cleanup', maxParticipants: '', registrationDeadline: '', pointsReward: '', isPublic: true, imageUrl: '' });
       setImageFile(null);
       setImagePreviewUrl('');
@@ -127,6 +124,7 @@ export const EventManager = () => {
       fetchEvents();
       toast.success('Saved', editingId ? 'Event updated.' : 'Event created.');
     } catch (error) {
+      await discardUpload(uploaded);
       console.error('Error saving event:', error);
       if (error?.code === 'permission-denied' || error?.code === 'storage/unauthorized') {
         toast.error(
@@ -147,11 +145,11 @@ export const EventManager = () => {
     setFormData({
       title: event.title,
       description: event.description,
-      date: event.date,
+      date: formatInputDate(event.date),
       location: event.location,
       category: event.category || 'cleanup',
       maxParticipants: event.maxParticipants || '',
-      registrationDeadline: event.registrationDeadline || '',
+      registrationDeadline: formatInputDate(event.registrationDeadline),
       pointsReward: event.pointsReward || '',
       isPublic: event.isPublic !== false,
       imageUrl: event.imageUrl || ''
@@ -198,7 +196,7 @@ export const EventManager = () => {
   };
 
   const getStatusBadge = (event) => {
-    const status = event.status || (new Date(event.date) >= new Date() ? 'upcoming' : 'completed');
+    const status = eventStatus(event);
     const colors = {
       upcoming: 'bg-blue-100 text-blue-700',
       ongoing: 'bg-green-100 text-green-700',
@@ -216,7 +214,7 @@ export const EventManager = () => {
         e?.title?.toLowerCase?.().includes(q) ||
         e?.description?.toLowerCase?.().includes(q) ||
         e?.location?.toLowerCase?.().includes(q);
-      const status = e?.status || (toDateSafe(e?.date) && toDateSafe(e?.date) >= new Date() ? 'upcoming' : 'completed');
+      const status = eventStatus(e);
       const matchesStatus = statusFilter === 'all' || status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -259,7 +257,7 @@ export const EventManager = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Description *</label>
                   <textarea
@@ -271,7 +269,7 @@ export const EventManager = () => {
                     required
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Category *</label>
                   <select
@@ -287,7 +285,7 @@ export const EventManager = () => {
                     <option value="other">Other</option>
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Event Date *</label>
                   <input
@@ -298,7 +296,7 @@ export const EventManager = () => {
                     required
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Location *</label>
                   <input
@@ -310,7 +308,7 @@ export const EventManager = () => {
                     required
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Registration Deadline</label>
                   <input
@@ -320,7 +318,7 @@ export const EventManager = () => {
                     className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Max Participants</label>
                   <input
@@ -332,7 +330,7 @@ export const EventManager = () => {
                     min="1"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Points Reward</label>
                   <input
@@ -344,7 +342,7 @@ export const EventManager = () => {
                     min="0"
                   />
                 </div>
-                
+
                 <div className="md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Event Image</label>
                   <input
@@ -368,7 +366,7 @@ export const EventManager = () => {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="md:col-span-2 flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -380,7 +378,7 @@ export const EventManager = () => {
                   <label htmlFor="isPublic" className="text-sm font-semibold text-gray-700">Public Event (visible to all)</label>
                 </div>
               </div>
-              
+
               <button type="submit" disabled={uploading} className="w-full btn-primary disabled:opacity-50">
                 {uploading ? 'Uploading...' : editingId ? 'Update Event' : 'Create Event'}
               </button>
@@ -420,13 +418,13 @@ export const EventManager = () => {
                 </div>
                 {getStatusBadge(event)}
               </div>
-              
+
               {event.imageUrl && (
                 <img src={event.imageUrl} alt={event.title} className="w-full h-36 object-cover rounded-2xl mb-3" loading="lazy" />
               )}
-              
+
               <p className="text-gray-600 text-sm mb-3 line-clamp-2">{event.description}</p>
-              
+
               <div className="space-y-1 text-sm text-gray-500 mb-3">
                 <p>📅 {formatEventDate(event.date)}</p>
                 <p>📍 {event.location}</p>
@@ -437,18 +435,18 @@ export const EventManager = () => {
                   <p className="text-brand-green font-semibold">🏆 +{event.pointsReward} points</p>
                 )}
               </div>
-              
+
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => viewParticipants(event)} className="flex-1 px-3 py-2 bg-gray-900 text-white rounded-xl text-sm font-semibold min-h-[44px] hover:bg-gray-800 transition">
                   Participants ({event.registeredCount || 0})
                 </button>
                 <button onClick={() => handleEdit(event)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold min-h-[44px] hover:bg-emerald-700 transition">Edit</button>
               </div>
-              
+
               <div className="flex gap-2 mt-2">
                 {event.status !== 'cancelled' && (
-                  <select 
-                    value={event.status || 'upcoming'} 
+                  <select
+                    value={eventStatus(event)}
                     onChange={(e) => updateStatus(event.id, e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm shadow-sm"
                   >
@@ -463,10 +461,10 @@ export const EventManager = () => {
             </div>
           ))}
         </div>
-        
-        <EventParticipantsDrawer 
-          event={selectedEvent} 
-          isOpen={drawerOpen} 
+
+        <EventParticipantsDrawer
+          event={selectedEvent}
+          isOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           onUpdate={fetchEvents}
         />

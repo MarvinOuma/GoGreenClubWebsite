@@ -1,16 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { formatEventDate } from '../../functions/lib/eventTime.mjs';
+import { nextPublicEvents } from '../firebase/eventQueries';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FaCalendarAlt,
-  FaFacebookF,
-  FaInstagram,
   FaLinkedinIn,
   FaRecycle,
   FaTree,
-  FaTwitter,
   FaUsers,
 } from 'react-icons/fa';
-import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import { db, functions } from '../firebase/firebaseConfig';
 import { httpsCallable } from 'firebase/functions';
 import { useToast } from '../components/ui/ToastProvider';
@@ -151,15 +150,26 @@ export const PublicDashboard = () => {
   const [partnerSending, setPartnerSending] = useState(false);
   const partnerRef = useRef(null);
 
-  const stats = useMemo(
-    () => [
-      { icon: FaRecycle, iconBg: 'bg-emerald-50 ring-1 ring-emerald-100', label: '♻️ Waste Collected', value: '44kg' },
-      { icon: FaTree, iconBg: 'bg-green-50 ring-1 ring-green-100', label: '🌳 Trees Planted', value: '5' },
-      { icon: FaUsers, iconBg: 'bg-teal-50 ring-1 ring-teal-100', label: '👥 Active Members', value: '4' },
-      { icon: FaCalendarAlt, iconBg: 'bg-lime-50 ring-1 ring-lime-100', label: '📅 Events Hosted', value: '0' },
-    ],
-    []
-  );
+  const [overview, setOverview] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    getDoc(doc(db, 'publicStats', 'overview'))
+      .then(snapshot => setOverview(snapshot.data() ?? null))
+      .catch(error => console.error('Unable to load public stats:', error))
+      .finally(() => setStatsLoading(false));
+  }, []);
+
+  const number = value => Number.isFinite(value) ? new Intl.NumberFormat('en-KE', {
+    maximumFractionDigits: 2,
+  }).format(value) : '—';
+
+  const stats = overview ? [
+    { icon: FaRecycle, label: 'Waste collected', value: overview.wasteKg == null ? '—' : `${number(overview.wasteKg)} kg` },
+    { icon: FaTree, label: 'Trees planted', value: number(overview.treesPlanted) },
+    { icon: FaUsers, label: 'Active members', value: number(overview.activeMembers) },
+    { icon: FaCalendarAlt, label: 'Events hosted', value: number(overview.eventsHosted) },
+  ] : [];
 
   useEffect(() => {
     const run = async () => {
@@ -196,17 +206,7 @@ export const PublicDashboard = () => {
     const run = async () => {
       try {
         setEventsLoading(true);
-        const snap = await getDocs(query(collection(db, 'events'), where('isPublic', '==', true)));
-        const now = new Date();
-        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const upcoming = items
-          .filter((e) => {
-            const d = toJsDate(e?.date);
-            return d && d >= now && e?.status !== 'cancelled';
-          })
-          .sort((a, b) => (toJsDate(a?.date)?.getTime?.() ?? 0) - (toJsDate(b?.date)?.getTime?.() ?? 0))
-          .slice(0, 3);
-        setUpcomingEvents(upcoming);
+        setUpcomingEvents(await nextPublicEvents(3));
       } catch (e) {
         console.error('Error loading upcoming events:', e);
         setUpcomingEvents([]);
@@ -304,10 +304,11 @@ export const PublicDashboard = () => {
       </section>
 
       {/* Impact Stats */}
-      <Section title="Impact Stats" subtitle="Small steps add up when we move together.">
+      <Section title="Our impact" subtitle="Waste and planting totals reflect verified activity reports.">
+        {!stats.length && <p role="status" className="text-sm text-gray-600">{statsLoading ? 'Loading impact figures…' : 'Verified figures will appear when they are available.'}</p>}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((s) => (
-            <StatCard key={s.label} icon={s.icon} iconBg={s.iconBg} label={s.label} value={s.value} />
+            <StatCard key={s.label} icon={s.icon} iconBg='bg-emerald-50 ring-1 ring-emerald-100' label={s.label} value={s.value} />
           ))}
         </div>
       </Section>
@@ -346,7 +347,7 @@ export const PublicDashboard = () => {
                   <h3 className="text-pretty text-lg font-extrabold tracking-tight text-gray-900">{e?.title ?? 'Event'}</h3>
                   <Pill>{(e?.category ?? 'event').toString()}</Pill>
                 </div>
-                <p className="mt-3 text-sm text-gray-600">📅 {toJsDate(e?.date) ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(toJsDate(e?.date)) : e?.date ?? ''}</p>
+                <p className="mt-3 text-sm text-gray-600">📅 {formatEventDate(e.date)}</p>
                 <p className="mt-1 text-sm text-gray-600">📍 {e?.location ?? 'TBA'}</p>
                 <div className="mt-5">
                   <PrimaryButton to={`/events?event=${e.id}`} className="w-full sm:w-auto">
@@ -435,8 +436,8 @@ export const PublicDashboard = () => {
                 key={post.id}
                 imageUrl={post?.coverImageUrl}
                 title={post?.title ?? 'Untitled'}
-                author={post?.authorName ?? 'Marvin Daniel'}
-                hashtag="#MksU"
+                author={post?.authorName}
+                hashtag={post?.tags?.[0] ? '#' + post.tags[0] : undefined}
                 to={`/blog/${post.id}`}
               />
             ))}
@@ -449,30 +450,9 @@ export const PublicDashboard = () => {
         title="Support GoGreen Club"
         subtitle="Your contribution helps us run cleanups, workshops, and community environmental projects."
       >
-        <div className="mx-auto max-w-2xl rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm sm:p-8">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-xl" aria-hidden="true">
-              🌱
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-500">Bank transfer</p>
-              <h3 className="text-xl font-extrabold text-gray-900">KCB Bank</h3>
-            </div>
-          </div>
-          <dl className="mt-6 grid gap-4 rounded-2xl bg-gray-50 p-5 sm:grid-cols-2">
-            <div>
-              <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Account name</dt>
-              <dd className="mt-1 font-bold text-gray-900">Veronica Samson Eunice JA</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-semibold uppercase tracking-wide text-gray-500">Account number</dt>
-              <dd className="mt-1 font-bold tracking-wide text-gray-900">1346825661</dd>
-            </div>
-          </dl>
-          <p className="mt-4 text-sm leading-relaxed text-gray-600">
-            Thank you for helping grow a greener community. Please use “GoGreen Club donation” as your transfer reference.
-          </p>
-        </div>
+        <button type="button" onClick={scrollToPartner} className="btn-secondary">
+          Ask about supporting the club
+        </button>
       </Section>
 
       {/* Get Involved */}
@@ -615,29 +595,8 @@ export const PublicDashboard = () => {
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white py-10">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-4 sm:flex-row">
-          <p className="text-sm font-semibold text-gray-600">GoGreen Club © 2025</p>
+          <p className="text-sm font-semibold text-gray-600">GoGreen Club © {new Date().getFullYear()}</p>
           <div className="flex items-center gap-3">
-            <a
-              href="#"
-              aria-label="GoGreen Club on Twitter"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 text-gray-700 ring-1 ring-gray-200 transition hover:bg-emerald-50 hover:text-emerald-700 hover:ring-emerald-200"
-            >
-              <FaTwitter />
-            </a>
-            <a
-              href="#"
-              aria-label="GoGreen Club on Instagram"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 text-gray-700 ring-1 ring-gray-200 transition hover:bg-emerald-50 hover:text-emerald-700 hover:ring-emerald-200"
-            >
-              <FaInstagram />
-            </a>
-            <a
-              href="#"
-              aria-label="GoGreen Club on Facebook"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 text-gray-700 ring-1 ring-gray-200 transition hover:bg-emerald-50 hover:text-emerald-700 hover:ring-emerald-200"
-            >
-              <FaFacebookF />
-            </a>
             <a
               href="https://www.linkedin.com/company/go-green-club/"
               target="_blank"

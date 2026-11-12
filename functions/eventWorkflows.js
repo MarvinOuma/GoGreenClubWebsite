@@ -1,5 +1,5 @@
 const { createHash } = require('node:crypto');
-const { https } = require('firebase-functions');
+const { https } = require('firebase-functions/v1');
 const { active, actorId, admin, documentId, fail, requireAdmin } = require('./lib/access.cjs');
 const { eventDate, eventStatus } = require('./lib/eventTime.mjs');
 

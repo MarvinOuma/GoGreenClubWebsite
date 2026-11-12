@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getCountFromServer, query, where } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '../layout/DashboardLayout';
@@ -30,27 +30,17 @@ export const AdminDashboard = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [usersSnapshot, approvedSnapshot, pendingSnapshot] = await Promise.all([
-          getDocs(collection(db, 'users')),
-          getDocs(query(collection(db, 'impactReports'), where('status', '==', 'approved'))),
-          getDocs(query(collection(db, 'impactReports'), where('status', '==', 'pending'))),
+        const [users, inactive, overview, pending] = await Promise.all([
+          getCountFromServer(collection(db, 'users')),
+          getCountFromServer(query(collection(db, 'users'), where('isActive', '==', false))),
+          getDoc(doc(db, 'publicStats', 'overview')),
+          getCountFromServer(query(collection(db, 'impactReports'), where('status', '==', 'pending'))),
         ]);
-
-        const totalMembers = usersSnapshot.size;
-
-        let totalWaste = 0;
-        let totalTrees = 0;
-        approvedSnapshot.docs.forEach((d) => {
-          const data = d.data();
-          totalWaste += parseInt(data.wasteAmount) || 0;
-          totalTrees += parseInt(data.treesPlanted) || 0;
-        });
-
         setStats({
-          totalMembers,
-          totalWaste,
-          totalTrees,
-          pendingReports: pendingSnapshot.size
+          totalMembers: users.data().count - inactive.data().count,
+          totalWaste: overview.data()?.wasteKg,
+          totalTrees: overview.data()?.treesPlanted,
+          pendingReports: pending.data().count,
         });
       } catch (error) {
         console.error('Error fetching stats:', error);
@@ -93,9 +83,9 @@ export const AdminDashboard = () => {
         </div>
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Total Members" value={stats.totalMembers} icon="👥" />
-          <StatCard label="Waste Collected" value={`${stats.totalWaste}kg`} icon="♻️" />
-          <StatCard label="Trees Planted" value={stats.totalTrees} icon="🌳" />
+          <StatCard label="Active members" value={stats.totalMembers} icon="👥" />
+          <StatCard label="Waste Collected" value={stats.totalWaste == null ? '—' : `${Number(stats.totalWaste.toFixed(2))} kg`} icon="♻️" />
+          <StatCard label="Trees Planted" value={stats.totalTrees ?? '—'} icon="🌳" />
           <StatCard label="Pending Reports" value={stats.pendingReports} icon="⏳" />
         </div>
 

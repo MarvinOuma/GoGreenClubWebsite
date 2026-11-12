@@ -1,6 +1,6 @@
 import { callFunction } from '../firebase/callable';
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, startAfter } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { DashboardLayout } from '../layout/DashboardLayout';
 import { useToast } from '../components/ui/ToastProvider';
@@ -16,6 +16,7 @@ const formatDate = (value) => {
 export const ApprovalQueue = () => {
   const toast = useToast();
   const [reviewing, setReviewing] = useState(false);
+  const [cursor, setCursor] = useState(null);
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -33,11 +34,15 @@ export const ApprovalQueue = () => {
     fetchReports();
   }, []);
 
-  const fetchReports = async () => {
+  const fetchReports = async (after = null) => {
     try {
-      const q = query(collection(db, 'impactReports'), where('status', '==', 'pending'));
+      setLoading(true);
+      const q = query(collection(db, 'impactReports'), where('status', '==', 'pending'),
+        ...(after ? [startAfter(after)] : []), limit(40));
       const snapshot = await getDocs(q);
-      setReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const page = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setReports(previous => after ? [...previous, ...page] : page);
+      setCursor(snapshot.size === 40 ? snapshot.docs.at(-1) : null);
     } catch (error) {
       console.error('Error fetching reports:', error);
       toast.error('Load failed', 'Failed to load pending reports.');
@@ -128,6 +133,11 @@ export const ApprovalQueue = () => {
           </div>
         )}
       </div>
+      {cursor && !loading && (
+        <button type="button" className="btn-secondary mt-6" onClick={() => fetchReports(cursor)}>
+          Load more reports
+        </button>
+      )}
     </DashboardLayout>
   );
 };

@@ -18,3 +18,9 @@ export async function uploadImage(directory, file) {
     throw error;
   }
 }
+
+export async function discardUpload(upload) {
+  if (upload) await deleteObject(ref(storage, upload.path)).catch(error => {
+    console.error('Unable to remove unused upload:', error.code);
+  });
+}

@@ -1,5 +1,5 @@
 const admin = require('firebase-admin');
-const { https } = require('firebase-functions');
+const { https } = require('firebase-functions/v1');
 
 const fail = (code, message) => { throw new https.HttpsError(code, message); };
 

@@ -38,12 +38,10 @@
   }
   
   html {
-    @apply overflow-x-hidden;
     scroll-behavior: smooth;
   }
   
   body {
-    @apply overflow-x-hidden;
     -webkit-overflow-scrolling: touch;
   }
   
@@ -74,5 +72,41 @@
   .touch-manipulation {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
+  }
+}
+
+
+@layer components {
+  .dialog-panel {
+    @apply m-auto w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl bg-white p-0 shadow-xl;
+  }
+
+  .dialog-drawer {
+    @apply inset-y-0 left-auto right-0 m-0 h-dvh max-h-none w-full overflow-y-auto bg-white p-0 shadow-xl;
+  }
+
+  .card-action::after {
+    @apply absolute inset-0 rounded-[inherit] content-[''];
+  }
+
+  dialog::backdrop {
+    @apply bg-slate-950/60;
+  }
+}
+
+body:has(dialog[open]) {
+  overflow: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid #248451;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

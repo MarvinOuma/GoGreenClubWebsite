@@ -1,3 +1,5 @@
+import { useId } from 'react';
+import { Dialog } from './ui/Dialog';
 const formatDate = (value) => {
   if (!value) return 'N/A';
   const d = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
@@ -15,19 +17,19 @@ export const UserDetailsDrawer = ({
   onRequestDelete,
   currentAdminId,
 }) => {
+  const titleId = useId();
   if (!isOpen || !user) return null;
 
   const canModify = currentAdminId !== user.id;
 
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={onClose} />
-      <div className="fixed top-0 right-0 h-full w-full sm:w-96 bg-white shadow-2xl z-50 overflow-y-auto">
+      <Dialog open={isOpen} onClose={onClose} titleId={titleId} className="dialog-drawer max-w-sm">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <p className="text-xs font-semibold text-gray-500">User</p>
-              <h2 className="text-2xl font-extrabold tracking-tight text-gray-900">Details</h2>
+              <h2 id={titleId} className="text-2xl font-extrabold tracking-tight text-gray-900">Details</h2>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-emerald-50 rounded-xl" aria-label="Close">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,7 +134,7 @@ export const UserDetailsDrawer = ({
             )}
           </div>
         </div>
-      </div>
+      </Dialog>
     </>
   );
 };

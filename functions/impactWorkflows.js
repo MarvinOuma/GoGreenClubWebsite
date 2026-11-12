@@ -1,4 +1,4 @@
-const { https } = require('firebase-functions');
+const { https } = require('firebase-functions/v1');
 const { admin, documentId, fail, requireAdmin } = require('./lib/access.cjs');
 
 const activities = new Set(['recycling', 'tree_planting', 'cleanup', 'other']);

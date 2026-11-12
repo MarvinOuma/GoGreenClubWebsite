@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
-import { imageAccept, uploadImage } from '../firebase/images';
+import { discardUpload, imageAccept, uploadImage } from '../firebase/images';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { DashboardLayout } from '../layout/DashboardLayout';
@@ -121,10 +121,12 @@ export const PartnersAdmin = () => {
     }
 
     setSaving(true);
+    let uploaded;
     try {
       let logoUrl = form.logoUrl || '';
       if (logoFile) {
-        logoUrl = (await uploadImage('partners', logoFile)).url;
+        uploaded = await uploadImage('partners', logoFile);
+        logoUrl = uploaded.url;
       }
 
       const payload = {
@@ -133,6 +135,7 @@ export const PartnersAdmin = () => {
         order: Number(form.order ?? 0) || 0,
         isActive: form.isActive !== false,
         logoUrl,
+        ...(uploaded ? { logoPath: uploaded.path } : {}),
       };
 
       if (editingId) {
@@ -147,9 +150,11 @@ export const PartnersAdmin = () => {
         toast.success('Created', 'Partner added.');
       }
 
+      uploaded = undefined;
       await fetchPartners();
       resetForm();
     } catch (err) {
+      await discardUpload(uploaded);
       console.error('Error saving partner:', err);
       toast.error('Save failed', err?.message ?? 'Please try again.');
     } finally {

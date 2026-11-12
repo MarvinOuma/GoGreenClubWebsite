@@ -12,8 +12,9 @@ export const Login = () => {
   const handleEmailLogin = async (e) => {
     e.preventDefault();
     try {
-      await signInWithEmail(email, password);
-      navigate('/member');
+      const { user } = await signInWithEmail(email, password);
+      const { claims } = await user.getIdTokenResult();
+      navigate(claims.admin === true ? '/admin' : '/member');
     } catch (err) {
       if (err?.code === 'auth/invalid-credential') {
         setError(
@@ -27,8 +28,9 @@ export const Login = () => {
 
   const handleGoogleLogin = async () => {
     try {
-      await signInWithGoogle();
-      navigate('/member');
+      const { user } = await signInWithGoogle();
+      const { claims } = await user.getIdTokenResult();
+      navigate(claims.admin === true ? '/admin' : '/member');
     } catch (err) {
       setError(err.message);
     }

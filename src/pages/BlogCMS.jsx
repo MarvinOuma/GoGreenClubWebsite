@@ -1,6 +1,7 @@
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, updateDoc } from 'firebase/firestore';
-import { imageAccept, uploadImage } from '../firebase/images';
+import { discardUpload, imageAccept, uploadImage } from '../firebase/images';
 import { db } from '../firebase/firebaseConfig';
 import { DashboardLayout } from '../layout/DashboardLayout';
 
@@ -70,36 +71,6 @@ const Toast = ({ toast, onClose }) => {
   );
 };
 
-const ConfirmModal = ({ open, title, description, confirmLabel = 'Delete', onCancel, onConfirm }) => {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-xl">
-        <div className="p-6">
-          <h3 className="text-lg font-extrabold text-gray-900">{title}</h3>
-          <p className="mt-2 text-sm text-gray-600">{description}</p>
-        </div>
-        <div className="flex items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 p-4">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const initialForm = {
   title: '',
   content: '',
@@ -150,13 +121,14 @@ export const BlogCMS = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    let uploaded;
     try {
       setSaving(true);
       setToast(null);
 
       let coverImageUrl;
       if (imageFile) {
-        const uploaded = await uploadImage('blog', imageFile);
+        uploaded = await uploadImage('blog', imageFile);
         coverImageUrl = uploaded.url;
       }
 
@@ -167,7 +139,7 @@ export const BlogCMS = () => {
         tags: parseTags(formData.tagsText),
         isPublished: !!formData.isPublished,
         updatedAt: new Date(),
-        ...(coverImageUrl ? { coverImageUrl } : {}),
+        ...(uploaded ? { coverImageUrl, coverImagePath: uploaded.path } : {}),
       };
 
       if (editingId) {
@@ -178,6 +150,7 @@ export const BlogCMS = () => {
         setToast({ type: 'success', message: 'Post created successfully.' });
       }
 
+      uploaded = undefined;
       setFormData(initialForm);
       setEditingId('');
       setImageFile(null);
@@ -185,8 +158,9 @@ export const BlogCMS = () => {
       setShowForm(false);
       await fetchPosts();
     } catch (e) {
+      await discardUpload(uploaded);
       console.error('Error saving post:', e);
-      setToast({ type: 'error', message: 'Failed to save post. Please try again.' });
+      setToast({ type: 'error', message: e.message || 'Failed to save post. Please try again.' });
     } finally {
       setSaving(false);
     }
@@ -472,7 +446,7 @@ export const BlogCMS = () => {
         </div>
       </div>
 
-      <ConfirmModal
+      <ConfirmDialog
         open={!!deleteTarget}
         title="Delete this post?"
         description={`This will permanently delete “${deleteTarget?.title ?? 'Untitled post'}”. This action cannot be undone.`}

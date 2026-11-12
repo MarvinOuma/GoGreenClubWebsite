@@ -1,3 +1,4 @@
+import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
 import { callFunction } from '../firebase/callable';
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -7,18 +8,6 @@ import { useAuth } from '../context/AuthContext';
 import { EventDetailsModal } from '../components/EventDetailsModal';
 import { useToast } from '../components/ui/ToastProvider';
 
-const toDateSafe = (value) => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
-
-const formatEventDate = (value) => {
-  const d = toDateSafe(value);
-  if (!d) return value ?? '';
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
-};
 
 const EventCardSkeleton = () => (
   <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -75,7 +64,7 @@ export const Events = () => {
       // IMPORTANT: Use a constrained query so this won't fail if private events exist.
       const snapshot = await getDocs(query(collection(db, 'events'), where('isPublic', '==', true)));
       const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      eventsData.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+      eventsData.sort((a, b) => eventDate(a.date) - eventDate(b.date));
       setEvents(eventsData.filter(e => e.isPublic !== false && e.status !== 'cancelled'));
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -160,9 +149,8 @@ export const Events = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events]);
 
-  const now = new Date();
-  const upcomingEvents = events.filter(e => e?.date && new Date(e.date) >= now);
-  const pastEvents = events.filter(e => e?.date && new Date(e.date) < now);
+  const upcomingEvents = events.filter(event => eventStatus(event) === 'upcoming');
+  const pastEvents = events.filter(event => eventStatus(event) === 'completed');
   
   const filteredEvents = useMemo(() => {
     let filtered = upcomingEvents;
@@ -333,8 +321,7 @@ export const Events = () => {
           <>
             {featuredEvent ? (
               <div
-                onClick={() => openEventDetails(featuredEvent)}
-                className="group mb-8 overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+                className="group relative mb-8 overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
               >
                 <div className="grid gap-0 md:grid-cols-2">
                   <div className="relative h-56 overflow-hidden bg-gray-100 md:h-full">
@@ -377,7 +364,9 @@ export const Events = () => {
                     <div className="mt-6">
                       <button
                         type="button"
-                        className="inline-flex items-center rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-800"
+                        onClick={() => openEventDetails(featuredEvent)}
+                        aria-label={`View details for ${featuredEvent.title}`}
+                        className="card-action inline-flex items-center rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-800"
                       >
                         View Details →
                       </button>
@@ -395,8 +384,7 @@ export const Events = () => {
                 return (
                   <div 
                     key={event.id} 
-                    onClick={() => openEventDetails(event)}
-                    className="group bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer"
+                    className="group relative bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer"
                   >
                     {event.imageUrl ? (
                       <div className="relative h-40 overflow-hidden bg-gray-100">
@@ -421,12 +409,12 @@ export const Events = () => {
                           </span>
                         ) : null}
                       </div>
-                      <h3 className="text-xl font-extrabold tracking-tight text-gray-900 mb-2">{event.title}</h3>
+                      <h3 className="text-xl font-extrabold tracking-tight text-gray-900 mb-2"><button type="button" className="card-action text-left" onClick={() => openEventDetails(event)}>{event.title}</button></h3>
                       <p className="text-gray-600 mb-4 text-sm line-clamp-2">{event.description}</p>
                       <div className="space-y-2 text-sm text-gray-600">
                         <p>📅 {formatEventDate(event.date)}</p>
                         <p>📍 {event.location}</p>
-                        {event.maxParticipants ? (
+                        {event.maxParticipants && event.registrationCountVersion === 1 ? (
                           <p className={spotsLeft <= 5 ? 'text-red-600 font-bold' : ''}>
                             👥 {spotsLeft > 0 ? `${spotsLeft} spots left` : 'Full'}
                           </p>

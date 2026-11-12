@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 
@@ -110,7 +110,7 @@ const SkeletonCard = () => (
   </div>
 );
 
-const TagPills = ({ tags, activeTag, onTagClick, onOpen }) => (
+const TagPills = ({ tags, activeTag, onTagClick }) => (
   <div className="flex flex-wrap gap-2">
     {(tags ?? []).map((tag) => (
       <button
@@ -120,33 +120,22 @@ const TagPills = ({ tags, activeTag, onTagClick, onOpen }) => (
           e.stopPropagation();
           onTagClick?.(tag);
         }}
-        className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+        className={`relative z-10 rounded-full px-3 py-1 text-xs font-semibold transition ${
           activeTag === tag ? 'bg-green-600 text-white' : 'bg-green-50 text-brand-green hover:bg-green-100'
         }`}
       >
         {tag}
       </button>
     ))}
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen?.();
-      }}
-      className="ml-auto inline-flex items-center gap-1 rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-gray-800"
-    >
-      Read More
-      <span aria-hidden className="text-white/80">→</span>
-    </button>
+
   </div>
 );
 
-const BlogCard = ({ post, activeTag, onTagClick, onOpen }) => {
+const BlogCard = ({ post, activeTag, onTagClick }) => {
   const imageUrl = post?.coverImageUrl;
   return (
     <article
-      onClick={onOpen}
-      className="group cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="relative h-44 overflow-hidden bg-gray-100">
         {imageUrl ? (
@@ -165,7 +154,7 @@ const BlogCard = ({ post, activeTag, onTagClick, onOpen }) => {
       <div className="space-y-3 p-5">
         <div className="space-y-1">
           <h3 className="text-pretty text-lg font-extrabold tracking-tight text-gray-900 group-hover:text-brand-green">
-            {post?.title ?? 'Untitled post'}
+            <Link to={`/blog/${post.id}`} className="card-action">{post.title}</Link>
           </h3>
           <p className="text-xs text-gray-500">
             <span className="font-semibold text-gray-700">{post?.authorName ?? 'Unknown author'}</span>
@@ -175,13 +164,13 @@ const BlogCard = ({ post, activeTag, onTagClick, onOpen }) => {
 
         <p className="text-sm leading-relaxed text-gray-600">{getExcerpt(post?.content, 150)}</p>
 
-        <TagPills tags={post?.tags} activeTag={activeTag} onTagClick={onTagClick} onOpen={onOpen} />
+        <TagPills tags={post?.tags} activeTag={activeTag} onTagClick={onTagClick} />
       </div>
     </article>
   );
 };
 
-const FeaturedPost = ({ post, activeTag, onTagClick, onOpen }) => {
+const FeaturedPost = ({ post, activeTag, onTagClick }) => {
   if (!post) return null;
   return (
     <div className="overflow-hidden rounded-3xl border border-green-100 bg-gradient-to-br from-white to-green-50 shadow-sm">
@@ -232,14 +221,12 @@ const FeaturedPost = ({ post, activeTag, onTagClick, onOpen }) => {
                 {tag}
               </button>
             ))}
-            <button
-              type="button"
-              onClick={onOpen}
-              className="ml-auto inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-800"
+            <Link to={`/blog/${post.id}`}
+                      className="ml-auto inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-800"
             >
               Read More
               <span aria-hidden className="text-white/80">→</span>
-            </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -254,7 +241,6 @@ export const Blog = () => {
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState('');
   const [visibleCount, setVisibleCount] = useState(6);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchPosts = async () => {
@@ -355,7 +341,6 @@ export const Blog = () => {
                 post={featuredPost}
                 activeTag={activeTag}
                 onTagClick={setActiveTag}
-                onOpen={() => navigate(`/blog/${featuredPost?.id}`)}
               />
 
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -365,7 +350,6 @@ export const Blog = () => {
                     post={post}
                     activeTag={activeTag}
                     onTagClick={setActiveTag}
-                    onOpen={() => navigate(`/blog/${post.id}`)}
                   />
                 ))}
               </div>

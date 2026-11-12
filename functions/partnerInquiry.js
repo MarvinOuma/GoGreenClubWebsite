@@ -1,6 +1,6 @@
 const { createHmac } = require('node:crypto');
 const admin = require('firebase-admin');
-const { https, runWith } = require('firebase-functions');
+const { https, runWith } = require('firebase-functions/v1');
 
 const limits = { name: 80, email: 200, organization: 120, message: 2000, website: 200 };
 const hour = 60 * 60 * 1000;

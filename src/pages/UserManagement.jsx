@@ -38,7 +38,7 @@ export const UserManagement = () => {
   const fetchUsers = async () => {
     try {
       const snapshot = await getDocs(collection(db, 'users'));
-      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setUsers(snapshot.docs.filter(doc => !doc.get('deletedAt')).map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -47,7 +47,7 @@ export const UserManagement = () => {
   };
 
   const filteredAndSortedUsers = useMemo(() => {
-    let filtered = users;
+    let filtered = [...users];
 
     // Search filter
     if (searchTerm) {

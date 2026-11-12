@@ -1,4 +1,4 @@
-const { auth, https } = require('firebase-functions');
+const { auth, https } = require('firebase-functions/v1');
 const { active, admin, documentId, fail, requireAdmin } = require('./lib/access.cjs');
 const { removeAccountRegistrations } = require('./eventWorkflows').internals;
 

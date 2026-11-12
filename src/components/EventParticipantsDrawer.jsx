@@ -1,12 +1,14 @@
+import { Dialog } from './ui/Dialog';
 import { callFunction } from '../firebase/callable';
 import { eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useToast } from './ui/ToastProvider';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 
 export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) => {
+  const titleId = useId();
   const toast = useToast();
   const [participants, setParticipants] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -76,12 +78,11 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
 
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={onClose} />
-      <div className="fixed right-0 top-0 h-full w-full md:w-[500px] bg-white shadow-2xl z-50 overflow-y-auto">
+      <Dialog open={isOpen} onClose={onClose} titleId={titleId} className="dialog-drawer max-w-[500px]">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-brand-green">Participants</h2>
+              <h2 id={titleId} className="text-2xl font-bold text-brand-green">Participants</h2>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" aria-label="Close participants">
@@ -159,7 +160,7 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
             </div>
           )}
         </div>
-      </div>
+      </Dialog>
 
       <ConfirmDialog
         open={!!confirmRemoveId}

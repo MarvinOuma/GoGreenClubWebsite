@@ -1,28 +1,13 @@
+import { nextPublicEvents } from '../firebase/eventQueries';
+import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
 import { useState, useEffect } from 'react';
-import { collection, doc, documentId, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '../layout/DashboardLayout';
 import { StatCard } from '../components/ui/StatCard';
 
-const toDateSafe = (value) => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, d] = value.split('-').map((n) => parseInt(n, 10));
-    // Treat date-only values as "end of day" in local time so today's events are still upcoming.
-    return new Date(y, m - 1, d, 23, 59, 59, 999);
-  }
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
-
-const formatEventDate = (value) => {
-  const d = toDateSafe(value);
-  if (!d) return value ?? '';
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
-};
 
 export const MemberDashboard = () => {
   const { currentUser } = useAuth();
@@ -46,55 +31,19 @@ export const MemberDashboard = () => {
         );
         const regsSnapshot = await getDocs(regsQuery);
         const registrations = regsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        setEventsJoined(registrations.length);
-
-        const now = new Date();
-
-        // Fetch upcoming registered events (only events the user registered for).
-        const eventIds = Array.from(new Set(registrations.map((r) => r.eventId).filter(Boolean)));
-        if (eventIds.length === 0) {
-          setUpcomingEvents([]);
-        } else {
-          // Load only the events the user registered for (chunked due to Firestore "in" limit).
-          const chunks = [];
-          for (let i = 0; i < eventIds.length; i += 10) chunks.push(eventIds.slice(i, i + 10));
-
-          const results = await Promise.all(
-            chunks.map((ids) => getDocs(query(collection(db, 'events'), where(documentId(), 'in', ids))))
-          );
-
-          const eventsById = new Map();
-          for (const snap of results) {
-            snap.docs.forEach((d) => eventsById.set(d.id, { id: d.id, ...d.data() }));
-          }
-
-          const upcoming = Array.from(eventsById.values())
-            .filter((e) => {
-              const d = toDateSafe(e?.date);
-              return d && d >= now;
-            })
-            .sort((a, b) => (toDateSafe(a?.date)?.getTime?.() ?? 0) - (toDateSafe(b?.date)?.getTime?.() ?? 0))
-            .slice(0, 4);
-
-          setUpcomingEvents(upcoming);
-        }
-
-        // Discover upcoming public events (shown even if user isn't registered).
-        try {
-          const pubSnap = await getDocs(query(collection(db, 'events'), where('isPublic', '==', true)));
-          const pubs = pubSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          const next = pubs
-            .filter((e) => {
-              const d = toDateSafe(e?.date);
-              return d && d >= now && e?.status !== 'cancelled';
-            })
-            .sort((a, b) => (toDateSafe(a?.date)?.getTime?.() ?? 0) - (toDateSafe(b?.date)?.getTime?.() ?? 0))
-            .slice(0, 3);
-          setDiscoverEvents(next);
-        } catch (e) {
-          console.warn('Failed to load discover events:', e);
-          setDiscoverEvents([]);
-        }
+        const eventIds = Array.from(new Set(registrations.map(record => record.eventId).filter(Boolean)));
+        setEventsJoined(eventIds.length);
+        const [joined, discover] = await Promise.all([
+          Promise.allSettled(eventIds.map(id => getDoc(doc(db, 'events', id)))),
+          nextPublicEvents(3).catch(() => []),
+        ]);
+        setUpcomingEvents(joined
+          .filter(result => result.status === 'fulfilled' && result.value.exists())
+          .map(({ value }) => ({ id: value.id, ...value.data() }))
+          .filter(event => eventStatus(event) === 'upcoming')
+          .sort((a, b) => eventDate(a.date) - eventDate(b.date))
+          .slice(0, 4));
+        setDiscoverEvents(discover);
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -112,8 +61,8 @@ export const MemberDashboard = () => {
   ];
 
   const greenPoints = userData?.greenPoints || 0;
-  const pointsIntoTier = greenPoints % 500;
-  const nextBadgeProgressPct = Math.min(Math.round((pointsIntoTier / 500) * 100), 100);
+  const nextBadge = [50, 250, 500, 1000].find(points => points > greenPoints);
+  const nextBadgeProgressPct = nextBadge ? Math.min(100, Math.max(0, Math.round(greenPoints / nextBadge * 100))) : 100;
 
   return (
     <DashboardLayout links={memberLinks} title="Impact Hub">

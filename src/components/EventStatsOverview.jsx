@@ -1,3 +1,4 @@
+import { eventStatus } from '../../functions/lib/eventTime.mjs';
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
@@ -21,10 +22,9 @@ export const EventStatsOverview = () => {
       const events = eventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const eventsById = new Map(events.map((e) => [e.id, e]));
       
-      const now = new Date();
-      const upcoming = events.filter(e => e.status === 'upcoming' || (new Date(e.date) >= now && !e.status));
-      const completed = events.filter(e => e.status === 'completed' || (new Date(e.date) < now && e.status !== 'cancelled'));
-      
+      const upcoming = events.filter(event => eventStatus(event) === 'upcoming');
+      const completed = events.filter(event => eventStatus(event) === 'completed');
+
       const regsSnap = await getDocs(collection(db, 'eventRegistrations'));
       const unique = new Map(); // key: userId_eventId -> reg
       regsSnap.docs.forEach((d) => {
@@ -42,7 +42,7 @@ export const EventStatsOverview = () => {
       const attended = registrations.filter(r => r.attended === true).length;
       const eligible = registrations.filter(r => {
         const event = eventsById.get(r.eventId);
-        return event && new Date(event.date) < now;
+        return event && eventStatus(event) === 'completed';
       }).length;
       
       setStats({

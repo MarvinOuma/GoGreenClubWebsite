@@ -8,4 +8,6 @@ Object.assign(
   require('./eventWorkflows'),
   require('./impactWorkflows'),
   require('./partnerInquiry'),
+  require('./publicStats'),
+  require('./mediaLifecycle'),
 );

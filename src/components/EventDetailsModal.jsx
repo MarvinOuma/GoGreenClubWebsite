@@ -1,21 +1,12 @@
-import { useMemo, useState } from 'react';
+import { Dialog } from './ui/Dialog';
+import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
+import { useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from './ui/ToastProvider';
 
-const toDateSafe = (value) => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
-
-const formatEventDate = (value) => {
-  const d = toDateSafe(value);
-  if (!d) return value ?? '';
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
-};
 
 export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregister, isRegistered, currentUserId }) => {
+  const titleId = useId();
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
@@ -36,8 +27,8 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
 
   const spotsLeft = (event.maxParticipants || 0) - (event.registeredCount || 0);
   const isFull = event.registrationCountVersion === 1 && event.maxParticipants && spotsLeft <= 0;
-  const isPast = new Date(event.date) < new Date();
-  const isDeadlinePassed = event.registrationDeadline && new Date(event.registrationDeadline) < new Date();
+  const isPast = eventStatus(event) !== 'upcoming';
+  const isDeadlinePassed = event.registrationDeadline && (eventDate(event.registrationDeadline)?.getTime() ?? 0) < Date.now();
   const canRegisterBase = !isRegistered && !isFull && !isPast && !isDeadlinePassed;
   const needsAuth = !currentUserId;
   const canClickRegister = canRegisterBase && !loading;
@@ -83,17 +74,14 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
   };
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onClose={onClose} titleId={titleId} className="dialog-panel max-w-2xl">
           {event.imageUrl && (
             <img src={event.imageUrl} alt={event.title} className="w-full h-48 md:h-64 object-cover rounded-t-2xl" />
           )}
           <div className="p-6">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-2xl font-bold text-brand-green mb-1">{event.title}</h2>
+                <h2 id={titleId} className="text-2xl font-bold text-brand-green mb-1">{event.title}</h2>
                 <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
                   {event.category?.toUpperCase() || 'EVENT'}
                 </span>
@@ -235,8 +223,6 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
               )}
             </div>
           </div>
-        </div>
-      </div>
-    </>
+    </Dialog>
   );
 };
