@@ -1,3 +1,4 @@
+import { FiCalendar, FiMapPin } from 'react-icons/fi';
 import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
 import { callFunction } from '../firebase/callable';
 import { useState, useEffect, useMemo } from 'react';
@@ -186,8 +187,8 @@ export const Events = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12">
-        <div className="max-w-6xl mx-auto px-4">
+      <div className="min-h-screen bg-ivory py-10 sm:py-14">
+        <div className="site-container">
           <div className="rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
             <div className="h-6 w-40 animate-pulse rounded bg-gray-100" />
             <div className="mt-4 h-4 w-2/3 animate-pulse rounded bg-gray-100" />
@@ -204,29 +205,27 @@ export const Events = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-6xl mx-auto px-4">
-        {/* Hero Section */}
-        <div className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700 p-8 md:p-12 mb-12 text-white shadow-sm">
-          <div className="pointer-events-none absolute inset-0 opacity-15">
-            <div className="absolute left-8 top-8 text-6xl">🌿</div>
-            <div className="absolute right-10 top-16 text-6xl">🌱</div>
-            <div className="absolute bottom-10 left-1/3 text-6xl">♻️</div>
+    <div className="min-h-screen bg-ivory py-10 sm:py-14">
+      <div className="site-container">
+        <header className="mb-8 flex flex-wrap items-end justify-between gap-6 border-b border-line pb-8 sm:mb-10">
+          <div>
+            <h1 className="site-heading">Join our events</h1>
+            <p className="mt-4 max-w-lg text-muted">Find cleanups, workshops, and other ways to take action with the club.</p>
           </div>
-          <h1 className="relative text-4xl md:text-5xl font-extrabold tracking-tight mb-4">Join Our Events</h1>
-          <p className="relative text-lg md:text-xl opacity-95 mb-6">Participate in environmental activities and earn Green Points!</p>
-          <div className="flex flex-wrap gap-4">
-            <div className="bg-white/20 backdrop-blur-sm rounded-xl px-6 py-3">
-              <p className="text-sm opacity-80">Upcoming Events</p>
-              <p className="text-2xl font-bold">{upcomingEvents.length}</p>
-            </div>
-            <div className="bg-white/20 backdrop-blur-sm rounded-xl px-6 py-3">
-              <p className="text-sm opacity-80">Your Registrations</p>
-              <p className="text-2xl font-bold">{myRegistrations.length}</p>
-            </div>
-          </div>
-        </div>
-        
+          {!error && (
+            <dl className="flex gap-6 border-l-2 border-leaf pl-4">
+              <div>
+                <dt className="text-sm text-muted">Upcoming</dt>
+                <dd className="font-display text-2xl font-semibold tabular-nums">{upcomingEvents.length}</dd>
+              </div>
+              {currentUser && <div>
+                <dt className="text-sm text-muted">Registered</dt>
+                <dd className="font-display text-2xl font-semibold tabular-nums">{registeredSet.size}</dd>
+              </div>}
+            </dl>
+          )}
+        </header>
+
         {/* Filters */}
         <div className="mb-8 space-y-4">
           <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
@@ -239,13 +238,15 @@ export const Events = () => {
             </div>
             <input
               type="text"
-              placeholder="Search events by title, description, location, or category..."
+              aria-label="Search events"
+              placeholder="Search events"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-12 pr-12 py-3 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-300"
             />
             {searchQuery && (
               <button
+                aria-label="Clear search"
                 onClick={() => setSearchQuery('')}
                 className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
               >
@@ -333,8 +334,8 @@ export const Events = () => {
                         loading="lazy"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 to-white">
-                        <span className="text-xs font-bold text-emerald-700">Featured Event</span>
+                      <div className="editorial-cover h-full" aria-hidden="true">
+                        <FiCalendar size={38} />
                       </div>
                     )}
                     <div className="absolute left-4 top-4 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow-sm">
@@ -396,7 +397,7 @@ export const Events = () => {
                         />
                       </div>
                     ) : (
-                      <div className="h-40 bg-gradient-to-br from-emerald-50 to-white" />
+                      <div className="editorial-cover h-40" aria-hidden="true"><FiCalendar size={32} /></div>
                     )}
                     <div className="p-5">
                       <div className="flex items-start justify-between mb-2 gap-2">
@@ -412,8 +413,8 @@ export const Events = () => {
                       <h3 className="text-xl font-extrabold tracking-tight text-gray-900 mb-2"><button type="button" className="card-action text-left" onClick={() => openEventDetails(event)}>{event.title}</button></h3>
                       <p className="text-gray-600 mb-4 text-sm line-clamp-2">{event.description}</p>
                       <div className="space-y-2 text-sm text-gray-600">
-                        <p>📅 {formatEventDate(event.date)}</p>
-                        <p>📍 {event.location}</p>
+                        <p className="flex items-center gap-2"><FiCalendar aria-hidden="true" />{formatEventDate(event.date)}</p>
+                        <p className="flex items-center gap-2"><FiMapPin aria-hidden="true" />{event.location}</p>
                         {event.maxParticipants && event.registrationCountVersion === 1 ? (
                           <p className={spotsLeft <= 5 ? 'text-red-600 font-bold' : ''}>
                             👥 {spotsLeft > 0 ? `${spotsLeft} spots left` : 'Full'}

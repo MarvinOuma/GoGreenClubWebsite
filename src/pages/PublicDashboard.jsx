@@ -1,3 +1,5 @@
+import { StatCard } from '../components/ui/StatCard';
+import { FiArrowDownRight, FiArrowUpRight, FiCalendar, FiMapPin, FiFeather } from 'react-icons/fi';
 import { formatEventDate } from '../../functions/lib/eventTime.mjs';
 import { nextPublicEvents } from '../firebase/eventQueries';
 import { useEffect, useRef, useState } from 'react';
@@ -26,11 +28,11 @@ const toJsDate = (value) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-const Section = ({ title, subtitle, children }) => (
-  <section className="py-14 sm:py-16">
-    <div className="mx-auto max-w-6xl px-4">
-      <div className="mx-auto max-w-2xl text-center">
-        {title ? <h2 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">{title}</h2> : null}
+const Section = ({ title, subtitle, children, className = '' }) => (
+  <section className={`border-b border-line py-12 sm:py-20 ${className}`}>
+    <div className="site-container">
+      <div className="max-w-2xl">
+        {title ? <h2 className="site-section-heading">{title}</h2> : null}
         {subtitle ? <p className="mt-3 text-sm text-gray-600 sm:text-base">{subtitle}</p> : null}
       </div>
       <div className="mt-10">{children}</div>
@@ -47,33 +49,10 @@ const Pill = ({ children }) => (
 const PrimaryButton = ({ to, children, className = '' }) => (
   <Link
     to={to}
-    className={`inline-flex items-center justify-center rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-emerald-100 ${className}`}
+    className={`btn-primary text-sm ${className}`}
   >
     {children}
   </Link>
-);
-
-const OutlineButton = ({ to, children, className = '' }) => (
-  <Link
-    to={to}
-    className={`inline-flex items-center justify-center rounded-xl border-2 border-emerald-600 bg-white px-6 py-3 text-sm font-bold text-emerald-700 shadow-sm transition hover:bg-emerald-50 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-emerald-100 ${className}`}
-  >
-    {children}
-  </Link>
-);
-
-const StatCard = ({ icon: Icon, iconBg, label, value }) => (
-  <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <p className="text-sm font-semibold text-gray-600">{label}</p>
-        <p className="mt-2 text-3xl font-extrabold tracking-tight text-gray-900">{value}</p>
-      </div>
-      <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${iconBg}`}>
-        <Icon className="text-xl text-emerald-700" aria-hidden="true" />
-      </div>
-    </div>
-  </div>
 );
 
 const BlogCard = ({ imageUrl, title, author, hashtag, to }) => (
@@ -87,17 +66,15 @@ const BlogCard = ({ imageUrl, title, author, hashtag, to }) => (
           loading="lazy"
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 to-white">
-          <span className="text-xs font-bold text-emerald-700">GoGreen Club</span>
+        <div className="editorial-cover h-full" aria-hidden="true">
+          <FiFeather size={32} />
         </div>
       )}
     </div>
     <div className="space-y-3 p-5">
       <h3 className="text-pretty text-lg font-extrabold tracking-tight text-gray-900">{title}</h3>
-      <p className="text-sm text-gray-600">
-        Author: <span className="font-semibold text-gray-800">{author}</span>
-      </p>
-      <Pill>{hashtag}</Pill>
+      {author && <p className="text-sm text-muted">{author}</p>}
+      {hashtag && <Pill>{hashtag}</Pill>}
       <div className="pt-2">
         <Link to={to} className="text-sm font-bold text-emerald-700 hover:underline">
           Read More →
@@ -274,30 +251,28 @@ export const PublicDashboard = () => {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-emerald-50 to-white py-16 sm:py-20">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-28 left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-emerald-200/50 blur-3xl" />
-          <div className="absolute -bottom-28 right-0 h-80 w-80 rounded-full bg-green-200/40 blur-3xl" />
-          <div className="absolute left-8 top-10 rotate-[-10deg] text-6xl opacity-25">🌿</div>
-          <div className="absolute right-10 top-24 rotate-[10deg] text-5xl opacity-25">🌱</div>
-          <div className="absolute bottom-20 left-10 rotate-[8deg] text-6xl opacity-20">🌍</div>
-          <div className="absolute bottom-12 right-12 rotate-[-8deg] text-5xl opacity-20">♻️</div>
-        </div>
-
-        <div className="relative mx-auto max-w-6xl px-4">
-          <div className="mx-auto max-w-3xl text-center">
-            <Pill>Green Steps, Big Impact!</Pill>
-            <h1 className="mt-5 text-balance text-4xl font-extrabold tracking-tight text-gray-900 sm:text-6xl">
-              GoGreen Club
+    <main className="min-h-screen bg-ivory">
+      <section className="bg-forest text-white">
+        <div className="site-container grid items-center gap-8 py-10 sm:py-16 md:grid-cols-[1.1fr_1fr] lg:gap-14 lg:py-20">
+          <div>
+            <h1 className="text-[clamp(3rem,7.2vw,7rem)] font-semibold leading-[0.96] tracking-[-0.075em]">
+              Green steps.<br /><span className="text-lime-accent">Big impact.</span>
             </h1>
-            <p className="mt-4 text-pretty text-sm leading-relaxed text-gray-700 sm:text-base">
-              A community of students, scientists, innovators, and changemakers advancing sustainability through STEAM.
+            <p className="mt-6 max-w-md text-base leading-relaxed text-emerald-100 sm:text-lg">
+              We’re a community of students, scientists, innovators, and changemakers advancing sustainability through STEAM.
             </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <PrimaryButton to="/signup">Join Now →</PrimaryButton>
-              <OutlineButton to="/events">Explore Events</OutlineButton>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link to="/signup" className="inline-flex min-h-11 items-center gap-3 rounded-lg bg-lime-accent px-5 py-3 text-sm font-bold text-ink hover:bg-white">
+                Join GoGreen Club <FiArrowUpRight aria-hidden="true" />
+              </Link>
+              <Link to="/events" className="inline-flex min-h-11 items-center gap-3 rounded-lg border border-emerald-200/40 px-5 py-3 text-sm font-semibold text-white hover:bg-white/10">
+                Explore events <FiArrowDownRight aria-hidden="true" />
+              </Link>
+            </div>
+          </div>
+          <div aria-hidden="true" className="home-art relative grid place-items-center overflow-hidden rounded-2xl border border-white/20">
+            <div className="grid size-36 place-items-center rounded-full bg-ivory shadow-xl sm:size-44 lg:size-56">
+              <img src="/logo.png" alt="" width="500" height="500" className="size-[78%] object-contain" />
             </div>
           </div>
         </div>
@@ -308,13 +283,13 @@ export const PublicDashboard = () => {
         {!stats.length && <p role="status" className="text-sm text-gray-600">{statsLoading ? 'Loading impact figures…' : 'Verified figures will appear when they are available.'}</p>}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((s) => (
-            <StatCard key={s.label} icon={s.icon} iconBg='bg-emerald-50 ring-1 ring-emerald-100' label={s.label} value={s.value} />
+            <StatCard key={s.label} icon={s.icon} label={s.label} value={s.value} />
           ))}
         </div>
       </Section>
 
       {/* Upcoming Events */}
-      <Section title="Upcoming Events">
+      <Section title="Upcoming events" className="bg-white">
         {eventsLoading ? (
           <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -347,8 +322,8 @@ export const PublicDashboard = () => {
                   <h3 className="text-pretty text-lg font-extrabold tracking-tight text-gray-900">{e?.title ?? 'Event'}</h3>
                   <Pill>{(e?.category ?? 'event').toString()}</Pill>
                 </div>
-                <p className="mt-3 text-sm text-gray-600">📅 {formatEventDate(e.date)}</p>
-                <p className="mt-1 text-sm text-gray-600">📍 {e?.location ?? 'TBA'}</p>
+                <p className="mt-3 flex items-center gap-2 text-sm text-muted"><FiCalendar aria-hidden="true" />{formatEventDate(e.date)}</p>
+                <p className="mt-1 flex items-center gap-2 text-sm text-muted"><FiMapPin aria-hidden="true" />{e.location}</p>
                 <div className="mt-5">
                   <PrimaryButton to={`/events?event=${e.id}`} className="w-full sm:w-auto">
                     View Details →
@@ -456,7 +431,7 @@ export const PublicDashboard = () => {
       </Section>
 
       {/* Get Involved */}
-      <Section title="Get Involved">
+      <Section title="Get involved" className="bg-white">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <InvolvedCard
             icon="🌱"

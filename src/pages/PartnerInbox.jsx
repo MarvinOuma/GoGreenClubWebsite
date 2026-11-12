@@ -33,19 +33,6 @@ export const PartnerInbox = () => {
   const [search, setSearch] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState('');
 
-  const adminLinks = useMemo(
-    () => [
-      { path: '/admin', label: 'Overview' },
-      { path: '/admin/events', label: 'Event Manager' },
-      { path: '/admin/users', label: 'User Management' },
-      { path: '/admin/reports', label: 'Approval Queue' },
-      { path: '/admin/blog', label: 'Blog CMS' },
-      { path: '/admin/partners', label: 'Partners' },
-      { path: '/admin/messages', label: 'Partner Inbox' },
-    ],
-    []
-  );
-
   useEffect(() => {
     fetchMessages();
   }, []);
@@ -111,7 +98,7 @@ export const PartnerInbox = () => {
   };
 
   return (
-    <DashboardLayout links={adminLinks} title="Partner Inbox">
+    <DashboardLayout title="Partner Inbox">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
           <p className="text-xs font-semibold text-gray-500">Admin</p>

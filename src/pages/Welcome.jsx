@@ -17,8 +17,8 @@ export const Welcome = () => {
     e.preventDefault();
     try {
       await setDoc(doc(db, 'users', currentUser.uid), {
-        name,
-        branch,
+        name: name.trim(),
+        branch: branch.trim(),
         interests: interests
           .split(',')
           .map((i) => i.trim())
@@ -44,25 +44,30 @@ export const Welcome = () => {
           <input
             type="text"
             placeholder="Full Name"
+            maxLength={120}
+            aria-label="Full Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+            className="w-full form-control"
             required
           />
           <input
             type="text"
             placeholder="Branch/Department"
+            maxLength={120}
+            aria-label="Branch/Department"
             value={branch}
             onChange={(e) => setBranch(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+            className="w-full form-control"
             required
           />
           <input
             type="text"
             placeholder="Interests (comma separated)"
+            aria-label="Interests (comma separated)"
             value={interests}
             onChange={(e) => setInterests(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+            className="w-full form-control"
             required
           />
           <button type="submit" className="w-full btn-primary">

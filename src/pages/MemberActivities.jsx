@@ -12,12 +12,6 @@ export const MemberActivities = () => {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ activityType: '', wasteAmount: '', treesPlanted: '', description: '' });
 
-  const memberLinks = [
-    { path: '/member', label: 'Dashboard' },
-    { path: '/member/profile', label: 'My Profile' },
-    { path: '/member/activities', label: 'My Activities' },
-  ];
-
   useEffect(() => {
     fetchActivities();
   }, [currentUser]);
@@ -51,7 +45,7 @@ export const MemberActivities = () => {
   };
 
   return (
-    <DashboardLayout links={memberLinks} title="My Activities">
+    <DashboardLayout title="My Activities">
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl md:text-3xl font-bold text-brand-green">Activities</h1>
@@ -63,10 +57,10 @@ export const MemberActivities = () => {
         {showForm && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
             <form onSubmit={handleSubmit} className="space-y-4">
-              <select
+              <select aria-label="Activity type"
                 value={formData.activityType}
                 onChange={(e) => setFormData({ ...formData, activityType: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
                 required
               >
                 <option value="">Select Activity Type</option>
@@ -77,23 +71,23 @@ export const MemberActivities = () => {
               </select>
               <input
                 type="number" min="0" max="10000" step="0.01"
-                placeholder="Waste Collected (kg)"
+                aria-label="Waste Collected (kg)" placeholder="Waste Collected (kg)"
                 value={formData.wasteAmount}
                 onChange={(e) => setFormData({ ...formData, wasteAmount: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
               />
               <input
                 type="number" min="0" max="10000" step="1"
-                placeholder="Trees Planted"
+                aria-label="Trees Planted" placeholder="Trees Planted"
                 value={formData.treesPlanted}
                 onChange={(e) => setFormData({ ...formData, treesPlanted: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
               />
               <textarea
-                placeholder="Description"
+                aria-label="Description" placeholder="Description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
                 rows={6} maxLength={2000}
                 required
               />

@@ -62,17 +62,21 @@ export const Login = () => {
           <input
             type="email"
             placeholder="Email"
+            autoComplete="email"
+            aria-label="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            className="w-full form-control"
             required
           />
           <input
             type="password"
+            autoComplete="current-password"
             placeholder="Password"
+            aria-label="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            className="w-full form-control"
             required
           />
           <div className="-mt-2 flex items-center justify-end">

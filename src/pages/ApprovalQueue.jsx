@@ -20,16 +20,6 @@ export const ApprovalQueue = () => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const adminLinks = [
-    { path: '/admin', label: 'Overview' },
-    { path: '/admin/events', label: 'Event Manager' },
-    { path: '/admin/users', label: 'User Management' },
-    { path: '/admin/reports', label: 'Approval Queue' },
-    { path: '/admin/blog', label: 'Blog CMS' },
-    { path: '/admin/partners', label: 'Partners' },
-    { path: '/admin/messages', label: 'Partner Inbox' },
-  ];
-
   useEffect(() => {
     fetchReports();
   }, []);
@@ -66,7 +56,7 @@ export const ApprovalQueue = () => {
   };
 
   return (
-    <DashboardLayout links={adminLinks} title="Approval Queue">
+    <DashboardLayout title="Approval Queue">
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">Pending Reports</h1>

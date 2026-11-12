@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { discardUpload, imageAccept, uploadImage } from '../firebase/images';
 import { db } from '../firebase/firebaseConfig';
@@ -45,19 +45,6 @@ export const PartnersAdmin = () => {
     isActive: true,
     logoUrl: '',
   });
-
-  const adminLinks = useMemo(
-    () => [
-      { path: '/admin', label: 'Overview' },
-      { path: '/admin/events', label: 'Event Manager' },
-      { path: '/admin/users', label: 'User Management' },
-      { path: '/admin/reports', label: 'Approval Queue' },
-      { path: '/admin/blog', label: 'Blog CMS' },
-      { path: '/admin/partners', label: 'Partners' },
-      { path: '/admin/messages', label: 'Partner Inbox' },
-    ],
-    []
-  );
 
   useEffect(() => {
     fetchPartners();
@@ -174,7 +161,7 @@ export const PartnersAdmin = () => {
   };
 
   return (
-    <DashboardLayout links={adminLinks} title="Partners">
+    <DashboardLayout title="Partners">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

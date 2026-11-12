@@ -1,3 +1,4 @@
+import { FiAward, FiCalendar, FiFlag, FiStar, FiTarget } from 'react-icons/fi';
 import { nextPublicEvents } from '../firebase/eventQueries';
 import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
 import { useState, useEffect } from 'react';
@@ -8,6 +9,13 @@ import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '../layout/DashboardLayout';
 import { StatCard } from '../components/ui/StatCard';
 
+
+const badges = [
+  { title: 'First Step', points: 50, icon: FiFlag },
+  { title: 'Eco Warrior', points: 250, icon: FiTarget },
+  { title: 'Tree Planter', points: 500, icon: FiStar },
+  { title: 'Champion', points: 1000, icon: FiAward },
+];
 
 export const MemberDashboard = () => {
   const { currentUser } = useAuth();
@@ -53,19 +61,13 @@ export const MemberDashboard = () => {
     fetchData();
   }, [currentUser]);
 
-  const memberLinks = [
-    { path: '/member', label: 'Dashboard' },
-    { path: '/member/profile', label: 'My Profile' },
-    { path: '/member/activities', label: 'My Activities' },
-    { path: '/member/events', label: 'My Events' },
-  ];
-
   const greenPoints = userData?.greenPoints || 0;
-  const nextBadge = [50, 250, 500, 1000].find(points => points > greenPoints);
-  const nextBadgeProgressPct = nextBadge ? Math.min(100, Math.max(0, Math.round(greenPoints / nextBadge * 100))) : 100;
+  const nextBadge = badges.find(badge => badge.points > greenPoints);
+  const earnedBadge = badges.findLast(badge => badge.points <= greenPoints);
+  const nextBadgeProgressPct = nextBadge ? Math.min(100, Math.max(0, Math.round(greenPoints / nextBadge.points * 100))) : 100;
 
   return (
-    <DashboardLayout links={memberLinks} title="Impact Hub">
+    <DashboardLayout title="Impact Hub">
       <div className="max-w-6xl mx-auto space-y-6">
         {loading ? (
           <div className="space-y-6">
@@ -88,16 +90,16 @@ export const MemberDashboard = () => {
           </div>
         ) : (
           <>
-        <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-          <p className="text-xs font-semibold text-gray-500">Welcome</p>
-          <h1 className="mt-1 text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">
+        <div className="dashboard-hero">
+          <p className="text-sm font-semibold">Impact Hub</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
             {userData?.name ? `${userData.name}` : 'Member Dashboard'}
           </h1>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm">
             Track your points, upcoming events, and milestones.
           </p>
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <button onClick={() => navigate('/member/activities')} className="btn-primary">
+            <button onClick={() => navigate('/member/activities')} className="btn-primary bg-lime-accent text-ink hover:bg-white">
               Log Activity
             </button>
             <button onClick={() => navigate('/events')} className="btn-secondary">
@@ -108,19 +110,19 @@ export const MemberDashboard = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCard label="Green Points" value={greenPoints} icon="🌟" />
-          <StatCard label="Events Joined" value={eventsJoined} icon="📅" />
-          <StatCard 
-            label="Impact Level" 
-            value={greenPoints >= 1000 ? 'Champion' : greenPoints >= 500 ? 'Tree Planter' : greenPoints >= 250 ? 'Eco Warrior' : 'Beginner'} 
-            icon="🏆" 
+          <StatCard label="Green Points" value={greenPoints} icon={FiStar} />
+          <StatCard label="Events Joined" value={eventsJoined} icon={FiCalendar} />
+          <StatCard
+            label="Impact Level"
+            value={earnedBadge?.title ?? 'Beginner'}
+            icon={FiAward}
           />
         </div>
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Upcoming Events */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
+          <div className="panel p-5">
             <div className="flex items-center justify-between gap-4 mb-4">
               <h2 className="text-xl font-extrabold tracking-tight text-gray-900">Your Upcoming Events</h2>
               <button onClick={() => navigate('/member/events')} className="text-sm font-bold text-emerald-700 hover:underline">
@@ -169,19 +171,19 @@ export const MemberDashboard = () => {
           </div>
 
           {/* Impact Tracker */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
+          <div className="panel p-5">
             <h2 className="text-xl font-extrabold tracking-tight text-gray-900 mb-4">Impact Tracker</h2>
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between mb-2">
-                  <span className="text-sm font-semibold">Progress to Next Badge</span>
+                  <span className="text-sm font-semibold">{nextBadge ? `Progress toward ${nextBadge.title}` : 'All milestones reached'}</span>
                   <span className="text-sm text-emerald-700 font-bold">{nextBadgeProgressPct}%</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
+                <div className="w-full bg-ivory rounded-full h-3" role="progressbar" aria-label="Badge progress" aria-valuenow={nextBadgeProgressPct}>
                   <div className="bg-emerald-600 h-3 rounded-full transition-all" style={{ width: `${nextBadgeProgressPct}%` }}></div>
                 </div>
               </div>
-              
+
               <button onClick={() => navigate('/member/activities')} className="w-full btn-primary min-h-[44px]">
                 Log Activity
               </button>
@@ -190,29 +192,17 @@ export const MemberDashboard = () => {
         </div>
 
         {/* Badges */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
+        <div className="panel p-5">
           <h2 className="text-xl font-extrabold tracking-tight text-gray-900 mb-4">Badges & Milestones</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className={`text-center p-4 rounded-xl ${greenPoints >= 50 ? 'bg-green-50' : 'bg-gray-100 opacity-50'}`}>
-              <div className="text-4xl mb-2">🌱</div>
-              <p className="text-sm font-semibold">First Step</p>
-              <p className="text-xs text-gray-600">50 points</p>
-            </div>
-            <div className={`text-center p-4 rounded-xl ${greenPoints >= 250 ? 'bg-green-50' : 'bg-gray-100 opacity-50'}`}>
-              <div className="text-4xl mb-2">🌿</div>
-              <p className="text-sm font-semibold">Eco Warrior</p>
-              <p className="text-xs text-gray-600">250 points</p>
-            </div>
-            <div className={`text-center p-4 rounded-xl ${greenPoints >= 500 ? 'bg-green-50' : 'bg-gray-100 opacity-50'}`}>
-              <div className="text-4xl mb-2">🌳</div>
-              <p className="text-sm font-semibold">Tree Planter</p>
-              <p className="text-xs text-gray-600">500 points</p>
-            </div>
-            <div className={`text-center p-4 rounded-xl ${greenPoints >= 1000 ? 'bg-green-50' : 'bg-gray-100 opacity-50'}`}>
-              <div className="text-4xl mb-2">🏆</div>
-              <p className="text-sm font-semibold">Champion</p>
-              <p className="text-xs text-gray-600">1000 points</p>
-            </div>
+            {badges.map(({ title, points, icon: Icon }) => (
+              <div key={title} className={`rounded-lg border p-4 ${greenPoints >= points ? 'border-leaf bg-ivory' : 'border-line'}`}>
+                <Icon aria-hidden="true" className="mb-3 text-xl text-leaf" />
+                <p className="text-sm font-semibold">{title}</p>
+                <p className="mt-1 text-xs text-muted">{greenPoints >= points ? 'Earned' : `${points} points`}</p>
+              </div>
+            ))}
+
           </div>
         </div>
           </>

@@ -13,13 +13,6 @@ export const MyEvents = () => {
   const [events, setEvents] = useState({});
   const [loading, setLoading] = useState(true);
 
-  const memberLinks = [
-    { path: '/member', label: 'Dashboard' },
-    { path: '/member/profile', label: 'My Profile' },
-    { path: '/member/activities', label: 'My Activities' },
-    { path: '/member/events', label: 'My Events' },
-  ];
-
   useEffect(() => {
     fetchMyEvents();
   }, [currentUser]);
@@ -63,7 +56,7 @@ export const MyEvents = () => {
   const missedRegs = pastRegs.filter(reg => reg.attended === false);
 
   return (
-    <DashboardLayout links={memberLinks} title="My Events">
+    <DashboardLayout title="My Events">
       <div className="max-w-4xl mx-auto space-y-8">
         {loading ? (
           <div className="space-y-6">

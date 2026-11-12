@@ -44,16 +44,6 @@ export const EventManager = () => {
     imageUrl: ''
   });
 
-  const adminLinks = [
-    { path: '/admin', label: 'Overview' },
-    { path: '/admin/events', label: 'Event Manager' },
-    { path: '/admin/users', label: 'User Management' },
-    { path: '/admin/reports', label: 'Approval Queue' },
-    { path: '/admin/blog', label: 'Blog CMS' },
-    { path: '/admin/partners', label: 'Partners' },
-    { path: '/admin/messages', label: 'Partner Inbox' },
-  ];
-
   useEffect(() => {
     fetchEvents();
   }, []);
@@ -221,7 +211,7 @@ export const EventManager = () => {
   }, [events, search, statusFilter]);
 
   return (
-    <DashboardLayout links={adminLinks} title="Event Manager">
+    <DashboardLayout title="Event Manager">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -247,35 +237,35 @@ export const EventManager = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Event Title *</label>
-                  <input
+                  <label htmlFor="eventmanager-event-title" className="block text-sm font-semibold text-gray-700 mb-2">Event Title *</label>
+                  <input id="eventmanager-event-title"
                     type="text"
                     placeholder="Beach Cleanup Drive"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                    className="w-full form-control"
                     required
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Description *</label>
-                  <textarea
+                  <label htmlFor="eventmanager-description" className="block text-sm font-semibold text-gray-700 mb-2">Description *</label>
+                  <textarea id="eventmanager-description"
                     placeholder="Join us for a community beach cleanup..."
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                    className="w-full form-control"
                     rows={6}
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Category *</label>
-                  <select
+                  <label htmlFor="eventmanager-category" className="block text-sm font-semibold text-gray-700 mb-2">Category *</label>
+                  <select id="eventmanager-category"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                    className="w-full form-control"
                     required
                   >
                     <option value="cleanup">Cleanup</option>
@@ -287,65 +277,65 @@ export const EventManager = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Event Date *</label>
-                  <input
+                  <label htmlFor="eventmanager-event-date" className="block text-sm font-semibold text-gray-700 mb-2">Event date (Nairobi time) *</label>
+                  <input id="eventmanager-event-date"
                     type="date"
                     value={formData.date}
                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                    className="w-full form-control"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Location *</label>
-                  <input
+                  <label htmlFor="eventmanager-location" className="block text-sm font-semibold text-gray-700 mb-2">Location *</label>
+                  <input id="eventmanager-location"
                     type="text"
                     placeholder="Central Park"
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                    className="w-full form-control"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Registration Deadline</label>
-                  <input
+                  <label htmlFor="eventmanager-registration-deadline" className="block text-sm font-semibold text-gray-700 mb-2">Registration deadline (Nairobi time)</label>
+                  <input id="eventmanager-registration-deadline"
                     type="date"
                     value={formData.registrationDeadline}
                     onChange={(e) => setFormData({ ...formData, registrationDeadline: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                    className="w-full form-control"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Max Participants</label>
-                  <input
+                  <label htmlFor="eventmanager-max-participants" className="block text-sm font-semibold text-gray-700 mb-2">Max Participants</label>
+                  <input id="eventmanager-max-participants"
                     type="number"
                     placeholder="50"
                     value={formData.maxParticipants}
                     onChange={(e) => setFormData({ ...formData, maxParticipants: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                    className="w-full form-control"
                     min="1"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Points Reward</label>
-                  <input
+                  <label htmlFor="eventmanager-points-reward" className="block text-sm font-semibold text-gray-700 mb-2">Points Reward</label>
+                  <input id="eventmanager-points-reward"
                     type="number"
                     placeholder="20"
                     value={formData.pointsReward}
                     onChange={(e) => setFormData({ ...formData, pointsReward: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                    className="w-full form-control"
                     min="0"
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Event Image</label>
-                  <input
+                  <label htmlFor="eventmanager-event-image" className="block text-sm font-semibold text-gray-700 mb-2">Event Image</label>
+                  <input id="eventmanager-event-image"
                     type="file"
                     accept={imageAccept}
                     onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
@@ -391,13 +381,13 @@ export const EventManager = () => {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search events..."
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100 md:col-span-2"
+              aria-label="Search managed events" placeholder="Search events"
+              className="w-full form-control md:col-span-2"
             />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+              className="w-full form-control"
             >
               <option value="all">All statuses</option>
               <option value="upcoming">Upcoming</option>

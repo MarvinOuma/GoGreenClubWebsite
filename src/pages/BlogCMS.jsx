@@ -91,16 +91,6 @@ export const BlogCMS = () => {
   const [toast, setToast] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const adminLinks = [
-    { path: '/admin', label: 'Overview' },
-    { path: '/admin/events', label: 'Event Manager' },
-    { path: '/admin/users', label: 'User Management' },
-    { path: '/admin/reports', label: 'Approval Queue' },
-    { path: '/admin/blog', label: 'Blog CMS' },
-    { path: '/admin/partners', label: 'Partners' },
-    { path: '/admin/messages', label: 'Partner Inbox' },
-  ];
-
   useEffect(() => {
     fetchPosts();
   }, []);
@@ -228,7 +218,7 @@ export const BlogCMS = () => {
   }, [imageFile]);
 
   return (
-    <DashboardLayout links={adminLinks} title="Blog CMS">
+    <DashboardLayout title="Blog CMS">
       <div className="max-w-4xl mx-auto space-y-6">
         <Toast toast={toast} onClose={() => setToast(null)} />
 
@@ -272,47 +262,47 @@ export const BlogCMS = () => {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-900">Title</label>
-                  <input
+                  <label htmlFor="blogcms-title" className="block text-sm font-semibold text-gray-900">Title</label>
+                  <input id="blogcms-title"
                     type="text"
                     placeholder="Post title"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                    className="mt-2 w-full form-control"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900">Author</label>
-                  <input
+                  <label htmlFor="blogcms-author" className="block text-sm font-semibold text-gray-900">Author</label>
+                  <input id="blogcms-author"
                     type="text"
                     placeholder="Author name"
                     value={formData.authorName}
                     onChange={(e) => setFormData({ ...formData, authorName: e.target.value })}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                    className="mt-2 w-full form-control"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900">Tags</label>
-                  <input
+                  <label htmlFor="blogcms-tags" className="block text-sm font-semibold text-gray-900">Tags</label>
+                  <input id="blogcms-tags"
                     type="text"
                     placeholder="e.g. Climate, Recycling, Events"
                     value={formData.tagsText}
                     onChange={(e) => setFormData({ ...formData, tagsText: e.target.value })}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                    className="mt-2 w-full form-control"
                   />
                   <p className="mt-1 text-xs text-gray-500">Comma separated. Example: Trees, Cleanups, Innovation</p>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900">Content</label>
-                <textarea
+                <label htmlFor="blogcms-content" className="block text-sm font-semibold text-gray-900">Content</label>
+                <textarea id="blogcms-content"
                   placeholder="Write your post..."
                   value={formData.content}
                   onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                  className="mt-2 w-full form-control"
                   rows={10}
                   required
                 />
@@ -320,8 +310,8 @@ export const BlogCMS = () => {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900">Cover image</label>
-                  <input
+                  <label htmlFor="blogcms-cover-image" className="block text-sm font-semibold text-gray-900">Cover image</label>
+                  <input id="blogcms-cover-image"
                     type="file"
                     accept={imageAccept}
                     onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}

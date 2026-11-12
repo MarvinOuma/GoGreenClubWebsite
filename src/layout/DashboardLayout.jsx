@@ -1,92 +1,71 @@
-import { Dialog } from '../components/ui/Dialog';
 import { useId, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { FiArrowUpRight, FiMenu, FiX } from 'react-icons/fi';
+import { Dialog } from '../components/ui/Dialog';
+import { adminLinks, memberLinks } from './dashboardLinks';
 
-export const DashboardLayout = ({ children, links, title }) => {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+function DashboardNav({ links, onNavigate }) {
+  return (
+    <nav aria-label="Dashboard" className="mt-5 space-y-1">
+      {links.map(({ path, label }) => (
+        <NavLink
+          key={path}
+          to={path}
+          end
+          onClick={onNavigate}
+          className={({ isActive }) => `block rounded-lg px-3 py-3 text-sm font-semibold ${isActive
+            ? 'bg-lime-accent text-ink'
+            : 'text-emerald-50 hover:bg-white/10'}`}
+        >
+          {label}
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
+export function DashboardLayout({ children, title }) {
+  const [open, setOpen] = useState(false);
   const titleId = useId();
-  const location = useLocation();
-
-  const closeDrawer = () => setDrawerOpen(false);
+  const isAdmin = useLocation().pathname.startsWith('/admin');
+  const links = isAdmin ? adminLinks : memberLinks;
+  const area = isAdmin ? 'Command Center' : 'Impact Hub';
+  const close = () => setOpen(false);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_20%_10%,rgba(134,239,172,0.35),transparent_45%),radial-gradient(circle_at_80%_20%,rgba(167,243,208,0.25),transparent_40%)]" />
-      {/* Mobile Header */}
-      <div className="md:hidden border-b border-gray-200 bg-white/80 backdrop-blur px-4 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-extrabold tracking-tight text-brand-green">{title}</h1>
-        <button onClick={() => setDrawerOpen(true)} className="p-2 hover:bg-green-50 rounded-xl" aria-label="Open navigation">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+    <div className="min-h-[calc(100dvh-4rem)] bg-ivory">
+      <div className="flex items-center justify-between gap-3 border-b border-line bg-white px-5 py-2 md:hidden">
+        <span className="font-display text-lg font-semibold text-forest">{title}</span>
+        <button type="button" onClick={() => setOpen(true)} className="btn-secondary px-3 py-2" aria-label="Open dashboard navigation" aria-haspopup="dialog">
+          <FiMenu aria-hidden="true" size={19} />
         </button>
       </div>
 
-      <div className="md:flex">
-        {/* Desktop Sidebar - Hidden on Mobile */}
-        <aside className="hidden md:block w-56 xl:w-64 shrink-0 bg-white/80 backdrop-blur border-r border-gray-200 min-h-screen sticky top-0">
-          <div className="p-6">
-            <Link to="/" className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm hover:shadow-md transition">
-              <img src="/logo.png" alt="GoGreen Club" className="h-10 w-10" />
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-gray-500">GoGreen Club</p>
-                <p className="text-base font-extrabold tracking-tight text-brand-green truncate">{title}</p>
-              </div>
+      <div className="mx-auto md:flex">
+        <aside className="hidden w-52 shrink-0 bg-forest text-white md:block xl:w-60">
+          <div className="sticky top-16 max-h-[calc(100dvh-4rem)] overflow-y-auto p-5">
+            <Link to="/" className="flex items-center justify-between gap-2 border-b border-white/20 pb-5 font-display text-lg font-semibold">
+              {area} <FiArrowUpRight aria-hidden="true" className="shrink-0 text-lime-accent" />
             </Link>
-            <nav className="space-y-2">
-              {links.map((link) => (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  aria-current={location.pathname === link.path ? 'page' : undefined}
-                  className={`block px-4 py-3 rounded-xl transition-all ${
-                    location.pathname === link.path
-                      ? 'bg-brand-green text-white shadow-sm'
-                      : 'text-gray-700 hover:bg-green-50 hover:text-brand-green'
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
+            <DashboardNav links={links} />
           </div>
         </aside>
-
-        {/* Main Content */}
-        <main className="min-w-0 flex-1 p-4 md:p-8">
+        <main className="min-w-0 flex-1 px-5 py-6 md:p-7 lg:p-10">
           {children}
         </main>
       </div>
 
-      <Dialog open={drawerOpen} onClose={closeDrawer} titleId={titleId} className="dialog-drawer max-w-xs">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-8">
-                <h2 id={titleId} className="text-xl font-bold text-brand-green">{title}</h2>
-                <button onClick={closeDrawer} className="p-2 hover:bg-green-50 rounded-xl" aria-label="Close navigation">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <nav className="space-y-2">
-                {links.map((link) => (
-                  <Link
-                    key={link.path}
-                    to={link.path}
-                  aria-current={location.pathname === link.path ? 'page' : undefined}
-                    onClick={closeDrawer}
-                    className={`block px-4 py-3 rounded-xl transition-all ${
-                      location.pathname === link.path
-                        ? 'bg-brand-green text-white'
-                        : 'text-gray-700 hover:bg-green-50 hover:text-brand-green'
-                    }`}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </nav>
-            </div>
+      <Dialog open={open} onClose={close} titleId={titleId} className="dialog-drawer max-w-xs bg-forest text-white">
+        <div className="p-5">
+          <div className="flex items-center justify-between gap-3 border-b border-white/20 pb-5">
+            <h2 id={titleId} className="text-xl font-semibold">{area}</h2>
+            <button type="button" onClick={close} className="btn-secondary px-3 py-2" aria-label="Close dashboard navigation">
+              <FiX aria-hidden="true" size={18} />
+            </button>
+          </div>
+          <DashboardNav links={links} onNavigate={close} />
+        </div>
       </Dialog>
     </div>
   );
-};
+}

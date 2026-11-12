@@ -21,16 +21,6 @@ export const UserManagement = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [confirmState, setConfirmState] = useState(null); // { title, description, confirmLabel, tone, action: fn }
 
-  const adminLinks = [
-    { path: '/admin', label: 'Overview' },
-    { path: '/admin/events', label: 'Event Manager' },
-    { path: '/admin/users', label: 'User Management' },
-    { path: '/admin/reports', label: 'Approval Queue' },
-    { path: '/admin/blog', label: 'Blog CMS' },
-    { path: '/admin/partners', label: 'Partners' },
-    { path: '/admin/messages', label: 'Partner Inbox' },
-  ];
-
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -168,7 +158,7 @@ export const UserManagement = () => {
   };
 
   return (
-    <DashboardLayout links={adminLinks} title="User Management">
+    <DashboardLayout title="User Management">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm w-full">

@@ -12,12 +12,6 @@ export const MemberProfile = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const memberLinks = [
-    { path: '/member', label: 'Dashboard' },
-    { path: '/member/profile', label: 'My Profile' },
-    { path: '/member/activities', label: 'My Activities' },
-  ];
-
   useEffect(() => {
     const fetchProfile = async () => {
       const docSnap = await getDoc(doc(db, 'users', currentUser.uid));
@@ -40,8 +34,8 @@ export const MemberProfile = () => {
     try {
       // Use setDoc with merge instead of updateDoc to create document if it doesn't exist
       await setDoc(doc(db, 'users', currentUser.uid), {
-        name: formData.name,
-        branch: formData.branch,
+        name: formData.name.trim(),
+        branch: formData.branch.trim(),
         interests: formData.interests
           .split(',')
           .map((i) => i.trim())
@@ -59,38 +53,38 @@ export const MemberProfile = () => {
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   return (
-    <DashboardLayout links={memberLinks} title="My Profile">
+    <DashboardLayout title="My Profile">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl md:text-3xl font-bold text-brand-green mb-6">Edit Profile</h1>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold mb-2">Full Name</label>
-              <input
+              <label htmlFor="memberprofile-full-name" className="block text-sm font-semibold mb-2">Full Name</label>
+              <input id="memberprofile-full-name"
                 type="text"
-                value={formData.name}
+                value={formData.name} maxLength={120}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-2">Branch/Department</label>
-              <input
+              <label htmlFor="memberprofile-branch-department" className="block text-sm font-semibold mb-2">Branch/Department</label>
+              <input id="memberprofile-branch-department"
                 type="text"
-                value={formData.branch}
+                value={formData.branch} maxLength={120}
                 onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-2">Interests (comma separated)</label>
-              <input
+              <label htmlFor="memberprofile-interests-comma-separated" className="block text-sm font-semibold mb-2">Interests (comma separated)</label>
+              <input id="memberprofile-interests-comma-separated"
                 type="text"
                 value={formData.interests}
                 onChange={(e) => setFormData({ ...formData, interests: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
                 required
               />
             </div>

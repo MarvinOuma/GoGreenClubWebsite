@@ -1,3 +1,4 @@
+import { FiFeather } from 'react-icons/fi';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
@@ -28,27 +29,14 @@ const getExcerpt = (content, maxLen = 150) => {
 };
 
 const BlogHeader = () => (
-  <div className="relative overflow-hidden bg-gradient-to-b from-green-50 to-white">
-    <div className="pointer-events-none absolute inset-0">
-      <div className="absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-green-200/40 blur-3xl" />
-      <div className="absolute -bottom-24 right-0 h-72 w-72 rounded-full bg-emerald-200/30 blur-3xl" />
+  <header className="bg-forest text-white">
+    <div className="site-container grid items-end gap-4 py-12 sm:py-16 md:grid-cols-2">
+      <h1 className="site-heading">GoGreen Club Blog</h1>
+      <p className="max-w-sm text-base leading-relaxed text-emerald-100 md:justify-self-end">
+        Stories, events, and sustainability initiatives from Machakos University.
+      </p>
     </div>
-    <div className="relative mx-auto max-w-6xl px-4 py-14 sm:py-16">
-      <div className="mx-auto max-w-2xl text-center">
-        <p className="inline-flex items-center gap-2 rounded-full bg-green-100 px-4 py-1.5 text-xs font-semibold text-brand-green">
-          GoGreen Club
-          <span className="h-1 w-1 rounded-full bg-brand-green/70" />
-          Blog
-        </p>
-        <h1 className="mt-4 text-balance text-3xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
-          GoGreen Club Blog
-        </h1>
-        <p className="mt-4 text-pretty text-sm text-gray-600 sm:text-base">
-          Stories, events, and sustainability initiatives from Machakos University.
-        </p>
-      </div>
-    </div>
-  </div>
+  </header>
 );
 
 const BlogFilters = ({ search, onSearch, tags, activeTag, onTag }) => (
@@ -57,7 +45,8 @@ const BlogFilters = ({ search, onSearch, tags, activeTag, onTag }) => (
       <input
         value={search}
         onChange={(e) => onSearch(e.target.value)}
-        placeholder="Search posts by title..."
+        aria-label="Search blog posts"
+        placeholder="Search posts by title"
         className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 pr-10 text-sm text-gray-900 shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
       />
       <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -146,8 +135,8 @@ const BlogCard = ({ post, activeTag, onTagClick }) => {
             loading="lazy"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-gray-500">
-            GoGreen Club
+          <div className="editorial-cover h-full" aria-hidden="true">
+            <FiFeather size={32} />
           </div>
         )}
       </div>
@@ -158,7 +147,7 @@ const BlogCard = ({ post, activeTag, onTagClick }) => {
           </h3>
           <p className="text-xs text-gray-500">
             <span className="font-semibold text-gray-700">{post?.authorName ?? 'Unknown author'}</span>
-            {post?.createdAt ? <span className="text-gray-400"> · {formatDate(post.createdAt)}</span> : null}
+            {post?.createdAt ? <span className="text-muted"> · {formatDate(post.createdAt)}</span> : null}
           </p>
         </div>
 
@@ -184,8 +173,8 @@ const FeaturedPost = ({ post, activeTag, onTagClick }) => {
               loading="lazy"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-gray-500">
-              Featured
+            <div className="editorial-cover h-full" aria-hidden="true">
+              <FiFeather size={40} />
             </div>
           )}
           <div className="absolute left-4 top-4 rounded-full bg-brand-green px-3 py-1 text-xs font-bold text-white shadow-sm">
@@ -193,13 +182,12 @@ const FeaturedPost = ({ post, activeTag, onTagClick }) => {
           </div>
         </div>
         <div className="p-6 md:p-8">
-          <p className="text-xs font-semibold text-brand-green">Latest story</p>
           <h2 className="mt-2 text-balance text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl">
             {post?.title ?? 'Untitled post'}
           </h2>
           <p className="mt-2 text-sm text-gray-500">
             <span className="font-semibold text-gray-700">{post?.authorName ?? 'Unknown author'}</span>
-            {post?.createdAt ? <span className="text-gray-400"> · {formatDate(post.createdAt)}</span> : null}
+            {post?.createdAt ? <span className="text-muted"> · {formatDate(post.createdAt)}</span> : null}
           </p>
           <p className="mt-4 text-sm leading-relaxed text-gray-700">{getExcerpt(post?.content, 220)}</p>
 
@@ -304,9 +292,9 @@ export const Blog = () => {
   const visiblePosts = remainingPosts.slice(0, cardsToShow);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ivory">
       <BlogHeader />
-      <div className="mx-auto max-w-6xl px-4 py-10">
+      <div className="site-container py-10">
         <div className="space-y-6">
           <BlogFilters
             search={search}
