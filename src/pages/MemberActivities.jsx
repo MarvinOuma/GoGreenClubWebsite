@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { DashboardLayout } from '../layout/DashboardLayout';
@@ -33,9 +33,12 @@ export const MemberActivities = () => {
     try {
       await addDoc(collection(db, 'impactReports'), {
         ...formData,
+        wasteAmount: Number(formData.wasteAmount),
+        treesPlanted: Number(formData.treesPlanted),
+        description: formData.description.trim(),
         userId: currentUser.uid,
         status: 'pending',
-        createdAt: new Date()
+        createdAt: serverTimestamp()
       });
       setFormData({ activityType: '', wasteAmount: '', treesPlanted: '', description: '' });
       setShowForm(false);
@@ -73,14 +76,14 @@ export const MemberActivities = () => {
                 <option value="other">Other</option>
               </select>
               <input
-                type="number"
+                type="number" min="0" max="10000" step="0.01"
                 placeholder="Waste Collected (kg)"
                 value={formData.wasteAmount}
                 onChange={(e) => setFormData({ ...formData, wasteAmount: e.target.value })}
                 className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
               />
               <input
-                type="number"
+                type="number" min="0" max="10000" step="1"
                 placeholder="Trees Planted"
                 value={formData.treesPlanted}
                 onChange={(e) => setFormData({ ...formData, treesPlanted: e.target.value })}
@@ -91,7 +94,7 @@ export const MemberActivities = () => {
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
-                rows={6}
+                rows={6} maxLength={2000}
                 required
               />
               <button type="submit" className="w-full btn-primary">Submit Activity</button>

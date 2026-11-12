@@ -1,118 +1,108 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    function isAdmin() {
-      return request.auth != null && request.auth.token.admin == true;
-    }
-    
-    function isAuthenticated() {
+    function signedIn() {
       return request.auth != null;
     }
 
-    function isOwnUser(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-    
-    function isActive() {
-      return isAuthenticated() && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isActive', true) != false;
-    }
-    
-    function eventExists(eventId) {
-      return exists(/databases/$(database)/documents/events/$(eventId));
-    }
-    
-    function getEvent(eventId) {
-      return get(/databases/$(database)/documents/events/$(eventId)).data;
-    }
-    
-    function isEventOpen(eventId) {
-      let event = getEvent(eventId);
-      return event.status != 'cancelled' && event.get('isPublic', true) != false;
+    function own(userId) {
+      return signedIn() && request.auth.uid == userId;
     }
 
-    function isValidProfilePayload() {
-      return request.resource.data.name is string &&
-             request.resource.data.branch is string &&
-             request.resource.data.interests is list &&
-             request.resource.data.interests.size() <= 25;
+    function profilePath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
     }
-    
-    // Users collection
+
+    function activeMember() {
+      return signedIn() && exists(profilePath()) &&
+        get(profilePath()).data.get('isActive', true) == true;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true &&
+        (!exists(profilePath()) || (
+          get(profilePath()).data.get('isActive', true) == true &&
+          get(profilePath()).data.get('adminRevoked', false) == false
+        ));
+    }
+
+    function textWithin(value, max) {
+      return value is string && value.size() > 0 && value.size() <= max;
+    }
+
+    function interestAt(values, index) {
+      return index >= values.size() || textWithin(values[index], 80);
+    }
+
+    function validInterests(values) {
+      return values is list && values.size() <= 25 &&
+        interestAt(values, 0) && interestAt(values, 1) && interestAt(values, 2) && interestAt(values, 3) && interestAt(values, 4) &&
+        interestAt(values, 5) && interestAt(values, 6) && interestAt(values, 7) && interestAt(values, 8) && interestAt(values, 9) &&
+        interestAt(values, 10) && interestAt(values, 11) && interestAt(values, 12) && interestAt(values, 13) && interestAt(values, 14) &&
+        interestAt(values, 15) && interestAt(values, 16) && interestAt(values, 17) && interestAt(values, 18) && interestAt(values, 19) &&
+        interestAt(values, 20) && interestAt(values, 21) && interestAt(values, 22) && interestAt(values, 23) && interestAt(values, 24);
+    }
+
+    function validProfile() {
+      let data = request.resource.data;
+      return textWithin(data.name, 120) && textWithin(data.branch, 120) &&
+        validInterests(data.interests);
+    }
+
+    function validReport() {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+        'userId', 'status', 'activityType', 'wasteAmount', 'treesPlanted', 'description', 'createdAt'
+      ]) &&
+        own(data.userId) && data.status == 'pending' && data.createdAt == request.time &&
+        data.activityType in ['recycling', 'tree_planting', 'cleanup', 'other'] &&
+        data.wasteAmount is number && data.wasteAmount >= 0 && data.wasteAmount <= 10000 &&
+        data.treesPlanted is int && data.treesPlanted >= 0 && data.treesPlanted <= 10000 &&
+        textWithin(data.description, 2000);
+    }
+
     match /users/{userId} {
-      allow list: if true; // Public can count users for impact stats
-      allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow create: if isOwnUser(userId) &&
-                       request.resource.data.keys().hasOnly(['name', 'branch', 'interests']) &&
-                       isValidProfilePayload();
-      allow update: if (isOwnUser(userId) &&
-                          request.resource.data.diff(resource.data).changedKeys().hasOnly(['name', 'branch', 'interests']) &&
-                          isValidProfilePayload()) ||
-                        isAdmin();
-      allow delete: if isAdmin();
+      allow list: if isAdmin();
+      allow get: if own(userId) || isAdmin();
+      allow create: if own(userId) &&
+        request.resource.data.keys().hasOnly(['name', 'branch', 'interests']) && validProfile();
+      allow update: if (own(userId) && activeMember() && validProfile() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'branch', 'interests'])) ||
+        isAdmin();
     }
-    
-    // Posts collection
+
     match /posts/{postId} {
       allow read: if resource.data.isPublished == true || isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow write: if isAdmin();
     }
-    
-    // Events collection
+
     match /events/{eventId} {
-      allow read: if resource.data.get('isPublic', true) != false || isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow read: if resource.data.isPublic == true || isAdmin();
+      allow write: if isAdmin();
     }
-    
-    // Event Registrations - Use composite key to prevent duplicates
+
     match /eventRegistrations/{registrationId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      
-      // Create: validate userId, eventId exists, event is open, user is active
-      allow create: if isActive() && 
-                       request.resource.data.userId == request.auth.uid &&
-                       request.resource.data.eventId is string &&
-                       eventExists(request.resource.data.eventId) &&
-                       isEventOpen(request.resource.data.eventId) &&
-                       request.resource.data.status == 'registered' &&
-                       request.resource.data.keys().hasAll(['userId', 'eventId', 'registeredAt', 'status']);
-      
-      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isAdmin();
+      allow read: if own(resource.data.userId) || isAdmin();
+      allow update, delete: if isAdmin();
     }
-    
-    // Impact Reports collection
+
     match /impactReports/{reportId} {
-      allow read: if true; // Public can read approved reports for impact stats
-      allow create: if isActive() && request.resource.data.userId == request.auth.uid;
+      allow read: if own(resource.data.userId) || isAdmin();
+      allow create: if activeMember() && validReport();
       allow update, delete: if isAdmin();
     }
 
-    // Partners (logos shown on home page)
     match /partners/{partnerId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow read: if resource.data.isActive == true || isAdmin();
+      allow write: if isAdmin();
     }
 
-    // Partner inquiries (public can create; admins can read/manage)
     match /partnerMessages/{messageId} {
-      allow read: if isAdmin();
+      allow read, update, delete: if isAdmin();
+    }
 
-      allow create: if
-        request.resource.data.keys().hasAll(['name', 'email', 'organization', 'message', 'status', 'createdAt']) &&
-        request.resource.data.name is string &&
-        request.resource.data.email is string &&
-        request.resource.data.organization is string &&
-        request.resource.data.message is string &&
-        request.resource.data.status == 'new' &&
-        request.resource.data.createdAt is timestamp &&
-        request.resource.data.name.size() <= 80 &&
-        request.resource.data.email.size() <= 200 &&
-        request.resource.data.organization.size() <= 120 &&
-        request.resource.data.message.size() <= 2000;
-
-      allow update, delete: if isAdmin();
+    match /publicStats/{statsId} {
+      allow get: if statsId == 'overview';
     }
   }
 }

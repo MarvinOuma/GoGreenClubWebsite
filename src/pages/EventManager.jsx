@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase/firebaseConfig';
+import { imageAccept, uploadImage } from '../firebase/images';
+import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { DashboardLayout } from '../layout/DashboardLayout';
 import { EventStatsOverview } from '../components/EventStatsOverview';
@@ -95,9 +95,8 @@ export const EventManager = () => {
       let imageUrl = formData.imageUrl;
       
       if (imageFile) {
-        const imageRef = ref(storage, `events/${Date.now()}_${imageFile.name}`);
-        await uploadBytes(imageRef, imageFile);
-        imageUrl = await getDownloadURL(imageRef);
+        const uploaded = await uploadImage('events', imageFile);
+        imageUrl = uploaded.url;
       }
       
       const eventData = {
@@ -352,7 +351,7 @@ export const EventManager = () => {
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Event Image</label>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept={imageAccept}
                     onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
                     className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm"
                   />

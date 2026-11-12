@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { db, storage } from '../firebase/firebaseConfig';
+import { imageAccept, uploadImage } from '../firebase/images';
+import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { DashboardLayout } from '../layout/DashboardLayout';
 import { useToast } from '../components/ui/ToastProvider';
@@ -124,10 +124,7 @@ export const PartnersAdmin = () => {
     try {
       let logoUrl = form.logoUrl || '';
       if (logoFile) {
-        const path = `partners/${Date.now()}_${logoFile.name}`;
-        const logoRef = ref(storage, path);
-        await uploadBytes(logoRef, logoFile);
-        logoUrl = await getDownloadURL(logoRef);
+        logoUrl = (await uploadImage('partners', logoFile)).url;
       }
 
       const payload = {
@@ -240,7 +237,7 @@ export const PartnersAdmin = () => {
                   <div className="rounded-2xl border border-gray-100 bg-white p-4">
                     <input
                       type="file"
-                      accept="image/*"
+                      accept={imageAccept}
                       onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
                       className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-xl file:border-0 file:bg-emerald-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-emerald-700 hover:file:bg-emerald-100"
                     />

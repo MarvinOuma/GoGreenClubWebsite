@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase/firebaseConfig';
+import { imageAccept, uploadImage } from '../firebase/images';
+import { db } from '../firebase/firebaseConfig';
 import { DashboardLayout } from '../layout/DashboardLayout';
 
 const toJsDate = (value) => {
@@ -156,9 +156,8 @@ export const BlogCMS = () => {
 
       let coverImageUrl;
       if (imageFile) {
-        const imageRef = ref(storage, `blog/${Date.now()}_${imageFile.name}`);
-        await uploadBytes(imageRef, imageFile);
-        coverImageUrl = await getDownloadURL(imageRef);
+        const uploaded = await uploadImage('blog', imageFile);
+        coverImageUrl = uploaded.url;
       }
 
       const payload = {
@@ -350,7 +349,7 @@ export const BlogCMS = () => {
                   <label className="block text-sm font-semibold text-gray-900">Cover image</label>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept={imageAccept}
                     onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
                     className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm"
                   />

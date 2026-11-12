@@ -10,8 +10,9 @@ import {
   FaTwitter,
   FaUsers,
 } from 'react-icons/fa';
-import { addDoc, collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
-import { db } from '../firebase/firebaseConfig';
+import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
+import { db, functions } from '../firebase/firebaseConfig';
+import { httpsCallable } from 'firebase/functions';
 import { useToast } from '../components/ui/ToastProvider';
 
 const toJsDate = (value) => {
@@ -258,14 +259,9 @@ export const PublicDashboard = () => {
     }
     setPartnerSending(true);
     try {
-      await addDoc(collection(db, 'partnerMessages'), {
-        name,
-        email,
-        organization: organization || '',
-        message,
-        status: 'new',
-        createdAt: new Date(),
-        source: 'home',
+      await httpsCallable(functions, 'submitPartnerInquiry')({
+        name, email, organization, message,
+        website: new FormData(e.currentTarget).get('website') || '',
       });
       setPartnerForm({ name: '', email: '', organization: '', message: '' });
       toast.success('Sent', 'Your message has been sent to the GoGreen Club admins.');
@@ -518,6 +514,9 @@ export const PublicDashboard = () => {
 
           <div className="mx-auto mt-10 max-w-2xl overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
             <form onSubmit={submitPartnerMessage} className="space-y-4 p-6 sm:p-8">
+              <div hidden aria-hidden="true">
+                <label>Website <input name="website" tabIndex={-1} autoComplete="off" /></label>
+              </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="block">
                   <span className="text-sm font-semibold text-gray-700">Name</span>

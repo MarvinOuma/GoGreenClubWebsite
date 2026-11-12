@@ -144,3 +144,5 @@ exports.deleteUser = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', 'Failed to delete user');
   }
 });
+
+exports.submitPartnerInquiry = require('./partnerInquiry').submitPartnerInquiry;
