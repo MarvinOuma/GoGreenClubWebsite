@@ -11,6 +11,8 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
   const titleId = useId();
   const toast = useToast();
   const [participants, setParticipants] = useState([]);
+  const [error, setError] = useState('');
+  const [hasDuplicates, setHasDuplicates] = useState(false);
   const [loading, setLoading] = useState(false);
   const [confirmRemoveId, setConfirmRemoveId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -23,6 +25,7 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
 
   const fetchParticipants = async () => {
     setLoading(true);
+    setError('');
     try {
       const q = query(collection(db, 'eventRegistrations'), where('eventId', '==', event.id));
       const snapshot = await getDocs(q);
@@ -42,6 +45,7 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
       }
 
       const uniqueRegs = Array.from(byUser.values());
+      setHasDuplicates(uniqueRegs.length < regs.filter(record => record.userId).length);
       const participantsData = await Promise.all(
         uniqueRegs.map(async (reg) => {
           const userDoc = await getDoc(doc(db, 'users', reg.userId));
@@ -52,6 +56,9 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
       setParticipants(participantsData);
     } catch (error) {
       console.error('Error fetching participants:', error);
+      setParticipants([]);
+      setHasDuplicates(false);
+      setError('Participants couldn’t be loaded.');
     } finally {
       setLoading(false);
     }
@@ -59,6 +66,7 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
 
   const updateParticipant = async (userId, attended) => {
     setSaving(true);
+    setError('');
     try {
       const remove = attended === undefined;
       await callFunction(remove ? 'removeEventParticipant' : 'markEventAttendance', {
@@ -68,7 +76,7 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
       await fetchParticipants();
       onUpdate?.();
     } catch (error) {
-      toast.error('Update failed', error.message);
+      setError(error.message || 'Please try again.');
     } finally {
       setSaving(false);
     }
@@ -101,6 +109,8 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
             </p>
           </div>
 
+          {error && <p role="alert" className="my-3 rounded-lg bg-red-50 p-3 text-sm text-danger">{error}</p>}
+          {hasDuplicates && <p className="my-3 text-sm text-warning">This event has legacy duplicate registrations. Review them before recording attendance.</p>}
           {loading ? (
             <p className="text-center py-8 text-gray-500">Loading...</p>
           ) : participants.length === 0 ? (

@@ -1,3 +1,4 @@
+import { webUrl } from '../lib/webUrl';
 import { useEffect, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { discardUpload, imageAccept, uploadImage } from '../firebase/images';
@@ -107,6 +108,12 @@ export const PartnersAdmin = () => {
       return;
     }
 
+    const website = webUrl(form.websiteUrl);
+    if (form.websiteUrl.trim() && !website) {
+      toast.error('Invalid website', 'Enter a complete HTTP or HTTPS address.');
+      return;
+    }
+
     setSaving(true);
     let uploaded;
     try {
@@ -118,7 +125,7 @@ export const PartnersAdmin = () => {
 
       const payload = {
         name,
-        websiteUrl: form.websiteUrl.trim(),
+        websiteUrl: website ?? '',
         order: Number(form.order ?? 0) || 0,
         isActive: form.isActive !== false,
         logoUrl,
@@ -296,9 +303,9 @@ export const PartnersAdmin = () => {
                         {p?.isActive === false ? 'Draft / Hidden' : 'Active'} · Order {Number(p?.order ?? 0) || 0}
                         {p?.createdAt ? ` · Added ${formatDateTime(p.createdAt)}` : ''}
                       </p>
-                      {p?.websiteUrl ? (
+                      {webUrl(p.websiteUrl) ? (
                         <a
-                          href={p.websiteUrl}
+                          href={webUrl(p.websiteUrl)}
                           target="_blank"
                           rel="noreferrer"
                           className="mt-2 inline-block text-sm font-bold text-emerald-700 hover:underline"

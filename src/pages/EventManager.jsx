@@ -74,6 +74,14 @@ export const EventManager = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const original = events.find(event => event.id === editingId);
+    const date = original && formData.date === formatInputDate(original.date) ? original.date : formData.date;
+    const registrationDeadline = original && formData.registrationDeadline === formatInputDate(original.registrationDeadline)
+      ? original.registrationDeadline ?? '' : formData.registrationDeadline;
+    if (registrationDeadline && eventDate(registrationDeadline) > eventDate(date)) {
+      toast.error('Check the registration deadline', 'The deadline must be on or before the event date.');
+      return;
+    }
     setUploading(true);
 
     let uploaded;
@@ -87,11 +95,13 @@ export const EventManager = () => {
 
       const eventData = {
         ...formData,
+        date,
+        registrationDeadline,
         maxParticipants: formData.maxParticipants ? parseInt(formData.maxParticipants) : null,
         pointsReward: formData.pointsReward ? parseInt(formData.pointsReward) : null,
         imageUrl,
         ...(uploaded ? { imagePath: uploaded.path } : {}),
-        status: editingId ? (events.find(event => event.id === editingId)?.status ?? 'upcoming') : 'upcoming'
+        status: original?.status ?? 'upcoming'
       };
 
       if (editingId) {
@@ -100,6 +110,7 @@ export const EventManager = () => {
         await addDoc(collection(db, 'events'), {
           ...eventData,
           registeredCount: 0,
+          registrationCountVersion: 2,
           createdAt: new Date(),
           createdBy: currentUser.uid
         });
@@ -330,6 +341,7 @@ export const EventManager = () => {
                     onChange={(e) => setFormData({ ...formData, pointsReward: e.target.value })}
                     className="w-full form-control"
                     min="0"
+                    max="10000"
                   />
                 </div>
 
@@ -430,7 +442,7 @@ export const EventManager = () => {
                 <button onClick={() => viewParticipants(event)} className="flex-1 px-3 py-2 bg-gray-900 text-white rounded-xl text-sm font-semibold min-h-[44px] hover:bg-gray-800 transition">
                   Participants ({event.registeredCount || 0})
                 </button>
-                <button onClick={() => handleEdit(event)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold min-h-[44px] hover:bg-emerald-700 transition">Edit</button>
+                <button onClick={() => handleEdit(event)} className="px-4 py-2 bg-leaf text-white rounded-xl text-sm font-semibold min-h-[44px] hover:bg-emerald-700 transition">Edit</button>
               </div>
 
               <div className="flex gap-2 mt-2">

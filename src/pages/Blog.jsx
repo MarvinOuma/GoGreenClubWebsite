@@ -71,7 +71,7 @@ const BlogFilters = ({ search, onSearch, tags, activeTag, onTag }) => (
           onClick={() => onTag(tag)}
           className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
             activeTag === tag
-              ? 'bg-green-600 text-white shadow-sm'
+              ? 'bg-leaf text-white shadow-sm'
               : 'bg-green-50 text-brand-green hover:bg-green-100'
           }`}
           title={`Filter by ${tag}`}
@@ -110,7 +110,7 @@ const TagPills = ({ tags, activeTag, onTagClick }) => (
           onTagClick?.(tag);
         }}
         className={`relative z-10 rounded-full px-3 py-1 text-xs font-semibold transition ${
-          activeTag === tag ? 'bg-green-600 text-white' : 'bg-green-50 text-brand-green hover:bg-green-100'
+          activeTag === tag ? 'bg-leaf text-white' : 'bg-green-50 text-brand-green hover:bg-green-100'
         }`}
       >
         {tag}
@@ -202,7 +202,7 @@ const FeaturedPost = ({ post, activeTag, onTagClick }) => {
                 }}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                   activeTag === tag
-                    ? 'bg-green-600 text-white shadow-sm'
+                    ? 'bg-leaf text-white shadow-sm'
                     : 'bg-green-100 text-brand-green hover:bg-green-200'
                 }`}
               >

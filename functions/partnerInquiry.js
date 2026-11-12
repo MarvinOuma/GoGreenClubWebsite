@@ -1,5 +1,5 @@
+const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { createHmac } = require('node:crypto');
-const admin = require('firebase-admin');
 const { https, runWith } = require('firebase-functions/v1');
 
 const limits = { name: 80, email: 200, organization: 120, message: 2000, website: 200 };
@@ -9,7 +9,7 @@ exports.submitPartnerInquiry = runWith({
   enforceAppCheck: process.env.PARTNER_ENFORCE_APP_CHECK === 'true',
   maxInstances: 10,
 }).https.onCall(async (data, context) => {
-  if (!data || Object.keys(data).some(key => !(key in limits)) ||
+  if (!data || Object.keys(data).some(key => !Object.hasOwn(limits, key)) ||
       Object.entries(limits).some(([key, max]) => typeof data[key] !== 'string' || data[key].length > max)) {
     throw new https.HttpsError('invalid-argument', 'Please check the inquiry fields.');
   }
@@ -22,14 +22,15 @@ exports.submitPartnerInquiry = runWith({
     throw new https.HttpsError('invalid-argument', 'Enter your name, a valid email, and a message.');
   }
 
-  const key = process.env.PARTNER_RATE_KEY ||
-    (process.env.FUNCTIONS_EMULATOR === 'true' ? 'emulator-only-key' : '');
-  const ip = context.rawRequest.ip;
+  const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
+  const key = process.env.PARTNER_RATE_KEY || (isEmulator ? 'emulator-only-key' : '');
+  const ip = context.rawRequest.ip || context.rawRequest.socket?.remoteAddress ||
+    (isEmulator ? 'local-emulator' : '');
   if (!key || !ip) {
     throw new https.HttpsError('unavailable', 'The inquiry form is temporarily unavailable.');
   }
 
-  const db = admin.firestore();
+  const db = getFirestore();
   const now = Date.now();
   const window = Math.floor(now / hour);
   const digest = value => createHmac('sha256', key).update(value).digest('hex');
@@ -45,13 +46,13 @@ exports.submitPartnerInquiry = runWith({
     }
     for (const { ref } of counters) {
       transaction.set(ref, {
-        count: admin.firestore.FieldValue.increment(1),
-        expiresAt: admin.firestore.Timestamp.fromMillis((window + 2) * hour),
+        count: FieldValue.increment(1),
+        expiresAt: Timestamp.fromMillis((window + 2) * hour),
       }, { merge: true });
     }
     transaction.create(db.collection('partnerMessages').doc(), {
       name, email, organization, message, source: 'home', status: 'new',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
   });
   return { accepted: true };

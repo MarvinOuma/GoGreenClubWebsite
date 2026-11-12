@@ -79,6 +79,13 @@ export const BlogPost = () => {
     run();
   }, [id]);
 
+  useEffect(() => {
+    if (!post?.title) return;
+    const original = document.title;
+    document.title = `${post.title} | GoGreen Club`;
+    return () => { document.title = original; };
+  }, [post?.title]);
+
   const createdLabel = useMemo(() => formatDate(post?.createdAt), [post?.createdAt]);
 
   if (loading) return <Skeleton />;
@@ -101,13 +108,13 @@ export const BlogPost = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-4xl px-4 py-10">
+    <main className="min-h-screen bg-ivory">
+      <div className="site-container max-w-4xl py-10 sm:py-14">
         <Link to="/blog" className="text-sm font-semibold text-brand-green hover:underline">
           ← Back to Blog
         </Link>
 
-        <div className="mt-6 overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+        <article className="panel mt-6 overflow-hidden">
           {post?.coverImageUrl ? (
             <div className="relative h-72 w-full overflow-hidden bg-gray-100 sm:h-96">
               <img
@@ -120,12 +127,12 @@ export const BlogPost = () => {
           ) : null}
 
           <div className="p-6 sm:p-10">
-            <h1 className="text-balance text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
+            <h1 className="site-section-heading">
               {post?.title ?? 'Untitled post'}
             </h1>
             <p className="mt-3 text-sm text-gray-500">
               <span className="font-semibold text-gray-700">{post?.authorName ?? 'Unknown author'}</span>
-              {createdLabel ? <span className="text-gray-400"> · {createdLabel}</span> : null}
+              {createdLabel ? <span className="text-muted"> · {createdLabel}</span> : null}
             </p>
 
             {(post?.tags ?? []).length ? (
@@ -141,12 +148,12 @@ export const BlogPost = () => {
               </div>
             ) : null}
 
-            <div className="mt-8 whitespace-pre-wrap text-sm leading-7 text-gray-700">
+            <div className="mt-8 max-w-prose whitespace-pre-wrap break-words text-base leading-8 text-ink">
               {post?.content ?? ''}
             </div>
           </div>
-        </div>
+        </article>
       </div>
-    </div>
+    </main>
   );
 };

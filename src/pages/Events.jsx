@@ -33,8 +33,6 @@ export const Events = () => {
   const [myRegistrations, setMyRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -43,9 +41,8 @@ export const Events = () => {
 
   useEffect(() => {
     fetchEvents();
-    if (currentUser) {
-      fetchMyRegistrations();
-    }
+    if (currentUser) fetchMyRegistrations();
+    else setMyRegistrations([]);
   }, [currentUser]);
 
   // Debounce search input
@@ -103,52 +100,25 @@ export const Events = () => {
       closeEventDetails();
       await Promise.all([fetchEvents(), fetchMyRegistrations()]);
     } catch (error) {
-      toast.error(register ? 'Registration failed' : 'Cancellation failed', error.message);
+      return error.message ?? 'Please try again.';
     }
   };
 
   const handleRegister = eventId => changeRegistration(eventId, true);
   const handleUnregister = eventId => changeRegistration(eventId, false);
 
-  const openEventDetails = (event) => {
-    setSelectedEvent(event);
-    setModalOpen(true);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('event', event.id);
+  const selectedEventId = searchParams.get('event');
+  const selectedEvent = events.find(event => event.id === selectedEventId);
+  const changeEventDetails = (eventId, replace = false) => {
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      if (eventId) next.set('event', eventId);
+      else next.delete('event');
       return next;
-    });
+    }, { replace });
   };
-
-  const closeEventDetails = () => {
-    setModalOpen(false);
-    setSelectedEvent(null);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('event');
-      return next;
-    });
-  };
-
-  // If someone opens /events?event=<id>, auto-open that event in the modal.
-  useEffect(() => {
-    const eventId = searchParams.get('event');
-    if (!eventId) return;
-    if (!events.length) return;
-    const found = events.find((e) => e.id === eventId);
-    if (found) {
-      setSelectedEvent(found);
-      setModalOpen(true);
-    } else {
-      toast.error('Event not found', 'This shared event link may be invalid or the event is no longer public.');
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete('event');
-        return next;
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events]);
+  const openEventDetails = event => changeEventDetails(event.id);
+  const closeEventDetails = () => changeEventDetails(null, true);
 
   const upcomingEvents = events.filter(event => eventStatus(event) === 'upcoming');
   const pastEvents = events.filter(event => eventStatus(event) === 'completed');
@@ -269,7 +239,7 @@ export const Events = () => {
                     !currentUser?.uid
                       ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                       : registeredOnly
-                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        ? 'bg-leaf text-white hover:bg-emerald-700'
                         : 'bg-white text-gray-900 ring-1 ring-gray-200 hover:bg-gray-50'
                   }`}
                   title={!currentUser?.uid ? 'Login to use this filter' : undefined}
@@ -286,7 +256,7 @@ export const Events = () => {
               key={cat}
               onClick={() => setFilter(cat)}
               className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                filter === cat ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-emerald-50'
+                filter === cat ? 'bg-leaf text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-emerald-50'
               }`}
             >
               {cat === 'all'
@@ -297,6 +267,10 @@ export const Events = () => {
         </div>
         </div>
         
+        {selectedEventId && !selectedEvent && !error && (
+          <p role="status" className="panel mb-6 p-4 text-sm text-muted">This event is unavailable.</p>
+        )}
+
         {error ? (
           <div className="mb-6 rounded-3xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-800">
             {error}
@@ -338,7 +312,7 @@ export const Events = () => {
                         <FiCalendar size={38} />
                       </div>
                     )}
-                    <div className="absolute left-4 top-4 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow-sm">
+                    <div className="absolute left-4 top-4 rounded-full bg-leaf px-3 py-1 text-xs font-bold text-white shadow-sm">
                       Featured
                     </div>
                   </div>
@@ -415,7 +389,7 @@ export const Events = () => {
                       <div className="space-y-2 text-sm text-gray-600">
                         <p className="flex items-center gap-2"><FiCalendar aria-hidden="true" />{formatEventDate(event.date)}</p>
                         <p className="flex items-center gap-2"><FiMapPin aria-hidden="true" />{event.location}</p>
-                        {event.maxParticipants && event.registrationCountVersion === 1 ? (
+                        {event.maxParticipants && event.registrationCountVersion >= 1 ? (
                           <p className={spotsLeft <= 5 ? 'text-red-600 font-bold' : ''}>
                             👥 {spotsLeft > 0 ? `${spotsLeft} spots left` : 'Full'}
                           </p>
@@ -462,7 +436,7 @@ export const Events = () => {
 
       <EventDetailsModal
         event={selectedEvent}
-        isOpen={modalOpen}
+        isOpen={Boolean(selectedEvent)}
         onClose={closeEventDetails}
         onRegister={handleRegister}
         onUnregister={handleUnregister}

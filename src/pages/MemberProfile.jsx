@@ -10,21 +10,27 @@ export const MemberProfile = () => {
   const toast = useToast();
   const [formData, setFormData] = useState({ name: '', branch: '', interests: '' });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      const docSnap = await getDoc(doc(db, 'users', currentUser.uid));
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setFormData({
-          name: data.name || '',
-          branch: data.branch || '',
-          interests: data.interests?.join(', ') || ''
-        });
-      }
+  const fetchProfile = async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const data = (await getDoc(doc(db, 'users', currentUser.uid))).data();
+      setFormData({
+        name: typeof data?.name === 'string' ? data.name : '',
+        branch: typeof data?.branch === 'string' ? data.branch : '',
+        interests: Array.isArray(data?.interests) ? data.interests.filter(value => typeof value === 'string').join(', ') : '',
+      });
+    } catch {
+      setLoadError(true);
+    } finally {
       setLoading(false);
-    };
+    }
+  };
+
+  useEffect(() => {
     fetchProfile();
   }, [currentUser]);
 
@@ -56,7 +62,12 @@ export const MemberProfile = () => {
     <DashboardLayout title="My Profile">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl md:text-3xl font-bold text-brand-green mb-6">Edit Profile</h1>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        {loadError ? (
+          <div className="panel p-5">
+            <p role="alert" className="mb-3 text-danger">Your profile couldn’t be loaded.</p>
+            <button type="button" className="btn-secondary" onClick={fetchProfile}>Try again</button>
+          </div>
+        ) : <div className="panel p-5">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="memberprofile-full-name" className="block text-sm font-semibold mb-2">Full Name</label>
@@ -92,7 +103,7 @@ export const MemberProfile = () => {
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </form>
-        </div>
+        </div>}
       </div>
     </DashboardLayout>
   );

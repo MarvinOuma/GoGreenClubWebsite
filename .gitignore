@@ -8,6 +8,7 @@ node_modules/
 
 # Build
 dist/
+dist-emulator/
 build/
 
 # Environment
@@ -30,3 +31,8 @@ firebase-export-metadata.json
 *serviceAccount*.json
 .env.*
 !.env.example
+
+# Test output
+playwright-report/
+test-results/
+.secret.local

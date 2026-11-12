@@ -19,7 +19,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return signedIn() && request.auth.token.admin == true &&
+      return signedIn() && request.auth.token.get('admin', false) == true &&
         (!exists(profilePath()) || (
           get(profilePath()).data.get('isActive', true) == true &&
           get(profilePath()).data.get('adminRevoked', false) == false
@@ -79,7 +79,8 @@ service cloud.firestore {
       allow read: if resource.data.isPublic == true || isAdmin();
       allow create: if isAdmin() &&
         request.resource.data.get('registeredCount', 0) == 0 &&
-        !request.resource.data.keys().hasAny(['deleting', 'registrationCountVersion']);
+        request.resource.data.get('registrationCountVersion', 2) == 2 &&
+        !request.resource.data.keys().hasAny(['deleting']);
       allow update: if isAdmin() && resource.data.get('deleting', false) == false &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'registeredCount', 'deleting', 'registrationCountVersion'

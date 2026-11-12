@@ -1,9 +1,12 @@
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getStorage } = require('firebase-admin/storage');
+const { setTimeout: delay } = require('node:timers/promises');
 const { createHash } = require('node:crypto');
 const { https } = require('firebase-functions/v1');
-const { active, actorId, admin, documentId, fail, requireAdmin } = require('./lib/access.cjs');
+const { active, actorId, documentId, fail, requireAdmin } = require('./lib/access.cjs');
 const { eventDate, eventStatus } = require('./lib/eventTime.mjs');
 
-const stamp = () => admin.firestore.FieldValue.serverTimestamp();
+const stamp = () => FieldValue.serverTimestamp();
 const registrationKey = (uid, eventId) => 'v2_' + createHash('sha256')
   .update(JSON.stringify([uid, eventId])).digest('hex');
 
@@ -22,20 +25,43 @@ function validCapacity(value) {
 
 async function registeredCount(transaction, db, event) {
   const count = event.get('registeredCount');
-  if (event.get('registrationCountVersion') === 1 && Number.isSafeInteger(count) && count >= 0) return count;
+  if ([1, 2].includes(event.get('registrationCountVersion')) && Number.isSafeInteger(count) && count >= 0) return count;
   const records = await transaction.get(eventRecords(db, event.id));
   return new Set(records.docs.map(doc => doc.get('userId')).filter(uid => typeof uid === 'string' && uid)).size;
 }
 
 function setCount(transaction, event, count) {
-  transaction.update(event.ref, { registeredCount: count, registrationCountVersion: 1 });
+  transaction.update(event.ref, {
+    registeredCount: count,
+    registrationCountVersion: event.get('registrationCountVersion') === 2 ? 2 : 1,
+  });
+}
+
+async function registrationRecords(transaction, db, event, uid) {
+  if (event.get('registrationCountVersion') === 2) {
+    const record = await transaction.get(db.collection('eventRegistrations').doc(registrationKey(uid, event.id)));
+    return record.exists ? [record] : [];
+  }
+  return (await transaction.get(eventRecords(db, event.id).where('userId', '==', uid))).docs;
+}
+
+async function runEventTransaction(db, callback) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await db.runTransaction(callback);
+    } catch (error) {
+      if (error.code !== 10) throw error;
+      if (attempt === 2) fail('aborted', 'The event is busy. Please retry.');
+      await delay(150 * (attempt + 1) + Math.random() * 150);
+    }
+  }
 }
 
 const changeRegistration = (action) => https.onCall(async (data, context) => {
   const eventId = documentId(data?.eventId);
   const uid = action === 'remove' ? documentId(data?.userId) : actorId(context);
-  const db = admin.firestore();
-  return db.runTransaction(async transaction => {
+  const db = getFirestore();
+  return runEventTransaction(db, async transaction => {
     if (action === 'remove') {
       await requireAdmin(transaction, db, context);
     } else {
@@ -44,10 +70,10 @@ const changeRegistration = (action) => https.onCall(async (data, context) => {
     }
     const event = await transaction.get(db.collection('events').doc(eventId));
     if (!event.exists || event.get('deleting')) fail('not-found', 'Event not found.');
-    const records = await transaction.get(eventRecords(db, eventId).where('userId', '==', uid));
+    const records = await registrationRecords(transaction, db, event, uid);
     const count = await registeredCount(transaction, db, event);
     if (action === 'register') {
-      if (records.size) {
+      if (records.length) {
         setCount(transaction, event, count);
         return { registered: true, changed: false };
       }
@@ -69,15 +95,15 @@ const changeRegistration = (action) => https.onCall(async (data, context) => {
       return { registered: true, changed: true };
     }
 
-    if (!records.size) return { registered: false, changed: false };
-    if (records.size > 400) fail('failed-precondition', 'These legacy registrations require administrator review.');
-    if (records.docs.some(record => typeof record.get('attended') === 'boolean')) {
+    if (!records.length) return { registered: false, changed: false };
+    if (records.length > 400) fail('failed-precondition', 'These legacy registrations require administrator review.');
+    if (records.some(record => typeof record.get('attended') === 'boolean')) {
       fail('failed-precondition', 'An attendance record exists. Keep it for the event history.');
     }
     if (action === 'cancel' && eventStatus(event.data()) === 'completed') {
       fail('failed-precondition', 'This event has ended.');
     }
-    records.docs.forEach(record => transaction.delete(record.ref));
+    records.forEach(record => transaction.delete(record.ref));
     setCount(transaction, event, Math.max(count - 1, 0));
     return { registered: false, changed: true };
   });
@@ -91,19 +117,19 @@ exports.markEventAttendance = https.onCall(async (data, context) => {
   const eventId = documentId(data?.eventId);
   const uid = documentId(data?.userId);
   if (typeof data?.attended !== 'boolean') fail('invalid-argument', 'Choose an attendance status.');
-  const db = admin.firestore();
+  const db = getFirestore();
   const userRef = db.collection('users').doc(uid);
   const ledger = db.collection('pointAwards').doc('attendance_' + registrationKey(uid, eventId));
-  return db.runTransaction(async transaction => {
+  return runEventTransaction(db, async transaction => {
     const reviewedBy = await requireAdmin(transaction, db, context);
     const event = await transaction.get(db.collection('events').doc(eventId));
     if (!event.exists || event.get('deleting') || eventStatus(event.data()) !== 'completed') {
       fail('failed-precondition', 'Attendance can be recorded after the event.');
     }
-    const records = await transaction.get(eventRecords(db, eventId).where('userId', '==', uid));
-    if (records.empty) fail('not-found', 'Registration not found.');
-    if (records.size > 1) fail('failed-precondition', 'Review duplicate registrations before recording attendance.');
-    const registration = records.docs[0];
+    const records = await registrationRecords(transaction, db, event, uid);
+    if (!records.length) fail('not-found', 'Registration not found.');
+    if (records.length > 1) fail('failed-precondition', 'Review duplicate registrations before recording attendance.');
+    const registration = records[0];
     const award = await transaction.get(ledger);
     const user = await transaction.get(userRef);
     if (!user.exists || user.get('deleting')) fail('failed-precondition', 'The member profile is unavailable.');
@@ -124,14 +150,14 @@ exports.markEventAttendance = https.onCall(async (data, context) => {
     transaction.update(registration.ref, {
       attended: data.attended, pointsAwarded: amount, reviewedAt: stamp(),
     });
-    if (pointsDelta) transaction.update(userRef, { greenPoints: admin.firestore.FieldValue.increment(pointsDelta) });
+    if (pointsDelta) transaction.update(userRef, { greenPoints: FieldValue.increment(pointsDelta) });
     return { pointsDelta };
   });
 });
 
 exports.deleteEvent = https.onCall(async (data, context) => {
   const id = documentId(data?.eventId);
-  const db = admin.firestore();
+  const db = getFirestore();
   const ref = db.collection('events').doc(id);
   const event = await db.runTransaction(async transaction => {
     await requireAdmin(transaction, db, context);
@@ -148,9 +174,12 @@ exports.deleteEvent = https.onCall(async (data, context) => {
     if (!page.empty) await batch.commit();
   } while (!page.empty);
   if (typeof event.imagePath === 'string' && /^events\/[a-f0-9-]{36}$/.test(event.imagePath)) {
-    await admin.storage().bucket().file(event.imagePath).delete({ ignoreNotFound: true });
+    await getStorage().bucket().file(event.imagePath).delete({ ignoreNotFound: true });
   }
-  await ref.delete();
+  await db.runTransaction(async transaction => {
+    const current = await transaction.get(ref);
+    if (current.get('deleting') === true) transaction.delete(ref);
+  });
   return { deleted: true };
 });
 

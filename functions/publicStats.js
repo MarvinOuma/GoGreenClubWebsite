@@ -1,18 +1,18 @@
 const { https, pubsub } = require('firebase-functions/v1');
-const { AggregateField, FieldPath, Timestamp } = require('firebase-admin/firestore');
-const { admin, requireAdmin } = require('./lib/access.cjs');
-const { eventStatus } = require('./lib/eventTime.mjs');
+const { AggregateField, FieldPath, getFirestore, Timestamp } = require('firebase-admin/firestore');
+const { requireAdmin } = require('./lib/access.cjs');
+const { eventDate, eventStatus } = require('./lib/eventTime.mjs');
 
 async function publishStats(db) {
   const calculatedAt = Timestamp.now();
   const users = db.collection('users');
-  const verified = db.collection('impactReports').where('verifiedImpact', '==', true);
+  const verified = db.collection('pointAwards').where('type', '==', 'impact');
   const [all, inactive, reports] = await Promise.all([
     users.count().get(),
     users.where('isActive', '==', false).count().get(),
     verified.aggregate({
       count: AggregateField.count(),
-      waste: AggregateField.sum('wasteAmount'),
+      waste: AggregateField.sum('wasteKg'),
       trees: AggregateField.sum('treesPlanted'),
     }).get(),
   ]);
@@ -23,7 +23,7 @@ async function publishStats(db) {
   for (;;) {
     const page = await (cursor ? publicEvents.startAfter(cursor) : publicEvents).get();
     if (page.empty) break;
-    eventsHosted += page.docs.filter(doc => doc.get('date') && eventStatus(doc.data(), calculatedAt.toMillis()) === 'completed').length;
+    eventsHosted += page.docs.filter(doc => eventDate(doc.get('date')) && eventStatus(doc.data(), calculatedAt.toMillis()) === 'completed').length;
     cursor = page.docs.at(-1);
   }
 
@@ -44,9 +44,9 @@ async function publishStats(db) {
   });
 }
 
-exports.publishPublicStats = pubsub.schedule('every 60 minutes').onRun(() => publishStats(admin.firestore()));
+exports.publishPublicStats = pubsub.schedule('every 60 minutes').onRun(() => publishStats(getFirestore()));
 exports.refreshPublicStats = https.onCall(async (_, context) => {
-  const db = admin.firestore();
+  const db = getFirestore();
   await db.runTransaction(transaction => requireAdmin(transaction, db, context));
   await publishStats(db);
   return { updated: true };

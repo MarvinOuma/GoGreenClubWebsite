@@ -80,12 +80,12 @@ export const UserManagement = () => {
       const updateUserRole = httpsCallable(functions, 'updateUserRole');
       await updateUserRole({ userId, role: newRole });
       
-      toast.success('Role updated', `Set to ${newRole}. User must logout/login to see changes.`);
+      toast.success('Role updated', `Set to ${newRole}. The user can refresh access or sign in again.`);
       fetchUsers();
       setDrawerOpen(false);
     } catch (error) {
       console.error('Error updating role:', error);
-      toast.error('Update failed', 'Failed to update role. Please try again.');
+      toast.error('Update failed', error.message);
     }
   };
 
@@ -100,7 +100,7 @@ export const UserManagement = () => {
       setDrawerOpen(false);
     } catch (error) {
       console.error('Error updating status:', error);
-      toast.error('Update failed', 'Failed to update account status. Please try again.');
+      toast.error('Update failed', error.message);
     }
   };
 
@@ -115,7 +115,7 @@ export const UserManagement = () => {
       setDrawerOpen(false);
     } catch (error) {
       console.error('Error deleting user:', error);
-      toast.error('Delete failed', 'Failed to delete user. Please try again.');
+      toast.error('Delete failed', error.message);
     }
   };
 

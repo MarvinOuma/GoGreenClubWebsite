@@ -41,7 +41,7 @@ export function DashboardLayout({ children, title }) {
         </button>
       </div>
 
-      <div className="mx-auto md:flex">
+      <div className="mx-auto md:flex md:min-h-[calc(100dvh-4rem)]">
         <aside className="hidden w-52 shrink-0 bg-forest text-white md:block xl:w-60">
           <div className="sticky top-16 max-h-[calc(100dvh-4rem)] overflow-y-auto p-5">
             <Link to="/" className="flex items-center justify-between gap-2 border-b border-white/20 pb-5 font-display text-lg font-semibold">

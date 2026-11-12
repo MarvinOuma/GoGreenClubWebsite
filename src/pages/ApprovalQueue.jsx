@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { callFunction } from '../firebase/callable';
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, limit, startAfter } from 'firebase/firestore';
@@ -15,6 +16,8 @@ const formatDate = (value) => {
 
 export const ApprovalQueue = () => {
   const toast = useToast();
+  const [status, setStatus] = useState('pending');
+  const [verifyId, setVerifyId] = useState(null);
   const [reviewing, setReviewing] = useState(false);
   const [cursor, setCursor] = useState(null);
   const [reports, setReports] = useState([]);
@@ -22,12 +25,12 @@ export const ApprovalQueue = () => {
 
   useEffect(() => {
     fetchReports();
-  }, []);
+  }, [status]);
 
   const fetchReports = async (after = null) => {
     try {
       setLoading(true);
-      const q = query(collection(db, 'impactReports'), where('status', '==', 'pending'),
+      const q = query(collection(db, 'impactReports'), where('status', '==', status),
         ...(after ? [startAfter(after)] : []), limit(40));
       const snapshot = await getDocs(q);
       const page = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -35,7 +38,7 @@ export const ApprovalQueue = () => {
       setCursor(snapshot.size === 40 ? snapshot.docs.at(-1) : null);
     } catch (error) {
       console.error('Error fetching reports:', error);
-      toast.error('Load failed', 'Failed to load pending reports.');
+      toast.error('Load failed', 'Failed to load reports.');
     } finally {
       setLoading(false);
     }
@@ -55,12 +58,36 @@ export const ApprovalQueue = () => {
     }
   };
 
+  const verifyReport = async () => {
+    const reportId = verifyId;
+    setVerifyId(null);
+    setReviewing(true);
+    try {
+      const { changed } = await callFunction('verifyLegacyImpactReport', { reportId });
+      toast.success(changed ? 'Verified for the next public summary' : 'This report was already verified');
+    } catch (error) {
+      toast.error('Verification failed', error.message);
+    } finally {
+      setReviewing(false);
+    }
+  };
+
   return (
     <DashboardLayout title="Approval Queue">
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">Pending Reports</h1>
-          <p className="mt-2 text-sm text-gray-600">Review activity submissions and award green points.</p>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">Impact report reviews</h1>
+          <p className="mt-2 text-sm text-gray-600">Review activity submissions, award Green Points, and verify previously approved reports.</p>
+        </div>
+
+        <div className="flex flex-wrap gap-2" aria-label="Report status">
+          {['pending', 'approved'].map(value => (
+            <button key={value} type="button" aria-pressed={status === value}
+              className={status === value ? 'btn-primary' : 'btn-secondary'}
+              disabled={loading || reviewing} onClick={() => setStatus(value)}>
+              {value === 'pending' ? 'Pending' : 'Previously approved'}
+            </button>
+          ))}
         </div>
 
         {loading ? (
@@ -76,8 +103,8 @@ export const ApprovalQueue = () => {
         ) : reports.length === 0 ? (
           <div className="rounded-3xl border border-gray-100 bg-white p-10 text-center shadow-sm">
             <p className="text-4xl">🌿</p>
-            <p className="mt-4 text-lg font-bold text-gray-900">No pending reports</p>
-            <p className="mt-2 text-sm text-gray-600">When members submit activities, they’ll appear here.</p>
+            <p className="mt-4 text-lg font-bold text-gray-900">No {status} reports</p>
+            <p className="mt-2 text-sm text-gray-600">{status === 'pending' ? 'New activity submissions will appear here.' : 'Approved reports will appear here.'}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -88,10 +115,10 @@ export const ApprovalQueue = () => {
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-extrabold tracking-tight text-gray-900">{report.activityType}</h3>
                       <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold">
-                        Pending
+                        {report.status}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-gray-600">User ID: {report.userId}</p>
+                    {report.userId && <p className="mt-1 break-all text-sm text-gray-600">User ID {report.userId}</p>}
                     {report?.createdAt ? (
                       <p className="mt-1 text-xs text-gray-500">Submitted: {formatDate(report.createdAt)}</p>
                     ) : null}
@@ -102,11 +129,15 @@ export const ApprovalQueue = () => {
                   {report.wasteAmount && <p className="text-sm">♻️ Waste: {report.wasteAmount}kg</p>}
                   {report.treesPlanted && <p className="text-sm">🌳 Trees: {report.treesPlanted}</p>}
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
+                {status === 'approved' ? (
+                  <button type="button" className="btn-secondary" disabled={reviewing} onClick={() => setVerifyId(report.id)}>
+                    Verify for public totals
+                  </button>
+                ) : <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     disabled={reviewing}
                     onClick={() => reviewReport(report.id, 'approved')}
-                    className="flex-1 px-4 py-2 rounded-xl min-h-[44px] bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition"
+                    className="flex-1 px-4 py-2 rounded-xl min-h-[44px] bg-leaf text-white font-semibold hover:bg-emerald-700 transition"
                   >
                     Approve
                   </button>
@@ -117,12 +148,15 @@ export const ApprovalQueue = () => {
                   >
                     Reject
                   </button>
-                </div>
+                </div>}
               </div>
             ))}
           </div>
         )}
       </div>
+      <ConfirmDialog open={Boolean(verifyId)} title="Verify this report for public totals?"
+        description="Check the original activity evidence first. Verification does not change historical Green Points."
+        confirmLabel="Verify report" tone="primary" onCancel={() => setVerifyId(null)} onConfirm={verifyReport} />
       {cursor && !loading && (
         <button type="button" className="btn-secondary mt-6" onClick={() => fetchReports(cursor)}>
           Load more reports

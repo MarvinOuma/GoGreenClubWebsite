@@ -1,3 +1,4 @@
+import { webUrl } from '../lib/webUrl';
 import { StatCard } from '../components/ui/StatCard';
 import { FiArrowDownRight, FiArrowUpRight, FiCalendar, FiMapPin, FiFeather } from 'react-icons/fi';
 import { formatEventDate } from '../../functions/lib/eventTime.mjs';
@@ -100,7 +101,7 @@ const InvolvedCard = ({ icon, title, description, cta, to, onClick }) => (
             <button
               type="button"
               onClick={onClick}
-              className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:w-auto"
+              className="inline-flex w-full items-center justify-center rounded-xl bg-leaf px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:w-auto"
             >
               {cta}
             </button>
@@ -351,31 +352,19 @@ export const PublicDashboard = () => {
         ) : partners.length === 0 ? (
           <div className="rounded-3xl border border-gray-100 bg-white p-10 text-center shadow-sm">
             <p className="text-lg font-bold text-gray-900">No partners added yet</p>
-            <p className="mt-2 text-sm text-gray-600">Admins can add partner logos in the admin panel.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-6">
-            {partners.map((p) => (
-              <a
-                key={p.id}
-                href={p?.websiteUrl || '#'}
-                target={p?.websiteUrl ? '_blank' : undefined}
-                rel={p?.websiteUrl ? 'noreferrer' : undefined}
-                className="group flex h-20 items-center justify-center rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                aria-label={p?.name ? `Partner: ${p.name}` : 'Partner'}
-              >
-                {p?.logoUrl ? (
-                  <img
-                    src={p.logoUrl}
-                    alt={p?.name ?? 'Partner logo'}
-                    className="max-h-12 w-auto max-w-full object-contain opacity-90 transition group-hover:opacity-100"
-                    loading="lazy"
-                  />
-                ) : (
-                  <span className="text-xs font-extrabold tracking-tight text-gray-700">{p?.name ?? 'Partner'}</span>
-                )}
-              </a>
-            ))}
+            {partners.map(partner => {
+              const url = webUrl(partner.websiteUrl);
+              const className = 'panel flex min-h-20 items-center justify-center p-4';
+              const logo = partner.logoUrl
+                ? <img src={partner.logoUrl} alt={partner.name} className="max-h-12 w-auto max-w-full object-contain" loading="lazy" />
+                : <span className="text-sm font-semibold">{partner.name}</span>;
+              return url ? (
+                <a key={partner.id} href={url} target="_blank" rel="noreferrer" className={className}>{logo}</a>
+              ) : <div key={partner.id} className={className}>{logo}</div>;
+            })}
           </div>
         )}
       </Section>
@@ -526,7 +515,7 @@ export const PublicDashboard = () => {
                 <button
                   type="submit"
                   disabled={partnerSending}
-                  className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-4 focus:ring-emerald-100"
+                  className="inline-flex items-center justify-center rounded-xl bg-leaf px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-4 focus:ring-emerald-100"
                 >
                   {partnerSending ? 'Sending…' : 'Send Message →'}
                 </button>

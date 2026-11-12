@@ -180,7 +180,7 @@ export const MemberDashboard = () => {
                   <span className="text-sm text-emerald-700 font-bold">{nextBadgeProgressPct}%</span>
                 </div>
                 <div className="w-full bg-ivory rounded-full h-3" role="progressbar" aria-label="Badge progress" aria-valuenow={nextBadgeProgressPct}>
-                  <div className="bg-emerald-600 h-3 rounded-full transition-all" style={{ width: `${nextBadgeProgressPct}%` }}></div>
+                  <div className="bg-leaf h-3 rounded-full transition-all" style={{ width: `${nextBadgeProgressPct}%` }}></div>
                 </div>
               </div>
 

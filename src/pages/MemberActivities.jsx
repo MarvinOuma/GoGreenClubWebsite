@@ -9,6 +9,9 @@ export const MemberActivities = () => {
   const { currentUser } = useAuth();
   const toast = useToast();
   const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ activityType: '', wasteAmount: '', treesPlanted: '', description: '' });
 
@@ -17,13 +20,23 @@ export const MemberActivities = () => {
   }, [currentUser]);
 
   const fetchActivities = async () => {
-    const q = query(collection(db, 'impactReports'), where('userId', '==', currentUser.uid));
-    const snapshot = await getDocs(q);
-    setActivities(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const q = query(collection(db, 'impactReports'), where('userId', '==', currentUser.uid));
+      const snapshot = await getDocs(q);
+      setActivities(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving) return;
+    setSaving(true);
     try {
       await addDoc(collection(db, 'impactReports'), {
         ...formData,
@@ -41,6 +54,8 @@ export const MemberActivities = () => {
     } catch (error) {
       console.error('Error submitting activity:', error);
       toast.error('Submit failed', 'Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -91,13 +106,18 @@ export const MemberActivities = () => {
                 rows={6} maxLength={2000}
                 required
               />
-              <button type="submit" className="w-full btn-primary">Submit Activity</button>
+              <button type="submit" className="w-full btn-primary" disabled={saving}>{saving ? 'Submitting…' : 'Submit activity'}</button>
             </form>
           </div>
         )}
 
         <div className="space-y-4">
-          {activities.length === 0 ? (
+          {loading ? <p role="status" className="text-muted">Loading activities…</p> : loadError ? (
+            <div className="panel p-5">
+              <p role="alert" className="mb-3 text-danger">Your activities couldn’t be loaded.</p>
+              <button type="button" className="btn-secondary" onClick={fetchActivities}>Try again</button>
+            </div>
+          ) : activities.length === 0 ? (
             <p className="text-gray-500">No activities yet. Log your first activity!</p>
           ) : (
             activities.map(activity => (

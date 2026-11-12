@@ -1,5 +1,5 @@
+const { getStorage } = require('firebase-admin/storage');
 const { runWith } = require('firebase-functions/v1');
-const admin = require('firebase-admin');
 
 function removeSupersededImage(collection, field, directory) {
   return runWith({ failurePolicy: true }).firestore.document(`${collection}/{id}`).onWrite(async change => {
@@ -10,7 +10,7 @@ function removeSupersededImage(collection, field, directory) {
     // Check the current document before acting on a delayed or retried trigger.
     const latest = await change.after.ref.get();
     if (latest.get(field) === previous) return;
-    await admin.storage().bucket().file(previous).delete({ ignoreNotFound: true });
+    await getStorage().bucket().file(previous).delete({ ignoreNotFound: true });
   });
 }
 

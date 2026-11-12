@@ -1,6 +1,6 @@
 import { Dialog } from './ui/Dialog';
 import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from './ui/ToastProvider';
 
@@ -8,68 +8,60 @@ import { useToast } from './ui/ToastProvider';
 export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregister, isRegistered, currentUserId }) => {
   const titleId = useId();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [shareMessage, setShareMessage] = useState('');
   const toast = useToast();
   const navigate = useNavigate();
-  const eventId = event?.id ?? '';
-
-  // Hooks must be called unconditionally. Compute shareUrl even when modal is closed.
-  const shareUrl = useMemo(() => {
-    if (!eventId) return '';
-    try {
-      const base = window.location.origin;
-      return `${base}/events?event=${encodeURIComponent(eventId)}`;
-    } catch {
-      return `/events?event=${encodeURIComponent(eventId)}`;
-    }
+  const eventId = event?.id;
+  useEffect(() => {
+    setError('');
+    setShareMessage('');
   }, [eventId]);
 
   if (!isOpen || !event) return null;
 
   const spotsLeft = (event.maxParticipants || 0) - (event.registeredCount || 0);
-  const isFull = event.registrationCountVersion === 1 && event.maxParticipants && spotsLeft <= 0;
+  const isFull = event.registrationCountVersion >= 1 && event.maxParticipants && spotsLeft <= 0;
   const isPast = eventStatus(event) !== 'upcoming';
   const isDeadlinePassed = event.registrationDeadline && (eventDate(event.registrationDeadline)?.getTime() ?? 0) < Date.now();
   const canRegisterBase = !isRegistered && !isFull && !isPast && !isDeadlinePassed;
   const needsAuth = !currentUserId;
   const canClickRegister = canRegisterBase && !loading;
 
-  const handleRegister = async () => {
+  const updateRegistration = async action => {
     setLoading(true);
-    await onRegister(event.id);
-    setLoading(false);
-  };
-
-  const handleUnregister = async () => {
-    setLoading(true);
-    await onUnregister(event.id);
-    setLoading(false);
-  };
-
-  const copyShareLink = async () => {
+    setError('');
     try {
-      if (!shareUrl) {
-        toast.error('Copy failed', 'Unable to create a share link for this event.');
-        return;
+      const message = await action(event.id);
+      if (message) setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyShareLink = async ({ currentTarget: button }) => {
+    const url = new URL('/events', window.location.origin);
+    url.searchParams.set('event', event.id);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url.href);
+      } else {
+        const input = document.createElement('textarea');
+        input.value = url.href;
+        input.readOnly = true;
+        input.className = 'sr-only';
+        button.closest('dialog').append(input);
+        try {
+          input.select();
+          if (!document.execCommand('copy')) throw new Error('Clipboard unavailable');
+        } finally {
+          input.remove();
+          button.focus();
+        }
       }
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareUrl);
-        toast.success('Link copied', 'Share it with your friends.');
-        return;
-      }
-      // Fallback
-      const ta = document.createElement('textarea');
-      ta.value = shareUrl;
-      ta.setAttribute('readonly', 'true');
-      ta.style.position = 'fixed';
-      ta.style.top = '-9999px';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      toast.success('Link copied', 'Share it with your friends.');
-    } catch (e) {
-      console.error('Copy link failed:', e);
-      toast.error('Copy failed', 'Please copy the URL from the address bar.');
+      setShareMessage('Link copied.');
+    } catch {
+      setShareMessage('Copy the link from the address bar.');
     }
   };
 
@@ -91,9 +83,8 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
                   type="button"
                   onClick={copyShareLink}
                   className="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition"
-                  aria-label="Copy event link"
                 >
-                  Copy Link
+                  Copy link
                 </button>
                 <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" aria-label="Close">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,38 +94,39 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
               </div>
             </div>
 
+            <p role="status" className="text-sm font-semibold text-leaf empty:hidden">{shareMessage}</p>
             <div className="space-y-4">
               <div>
-                <label className="text-sm text-gray-500">Description</label>
+                <p className="text-sm text-muted">Description</p>
                 <p className="text-gray-700">{event.description}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm text-gray-500">Date</label>
+                  <p className="text-sm text-muted">Date</p>
                   <p className="font-semibold">📅 {formatEventDate(event.date)}</p>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Location</label>
+                  <p className="text-sm text-muted">Location</p>
                   <p className="font-semibold">📍 {event.location}</p>
                 </div>
                 {event.registrationDeadline && (
                   <div className="col-span-2">
-                    <label className="text-sm text-gray-500">Registration Deadline</label>
-                    <p className={`font-semibold ${isDeadlinePassed ? 'text-red-500' : ''}`}>
+                    <p className="text-sm text-muted">Registration Deadline</p>
+                    <p className={`font-semibold ${isDeadlinePassed ? 'text-danger' : ''}`}>
                       ⏰ {formatEventDate(event.registrationDeadline)} {isDeadlinePassed && '(Passed)'}
                     </p>
                   </div>
                 )}
               </div>
 
-              {event.maxParticipants && (
+              {event.maxParticipants && event.registrationCountVersion >= 1 ? (
                 <div>
-                  <label className="text-sm text-gray-500">Availability</label>
+                  <p className="text-sm text-muted">Availability</p>
                   <div className="mt-2">
                     <div className="flex justify-between text-sm mb-1">
                       <span>{event.registeredCount || 0} / {event.maxParticipants} registered</span>
-                      <span className={spotsLeft <= 5 ? 'text-red-500 font-semibold' : 'text-gray-600'}>
+                      <span className={spotsLeft <= 5 ? 'text-danger font-semibold' : 'text-gray-600'}>
                         {spotsLeft > 0 ? `${spotsLeft} spots left` : 'Full'}
                       </span>
                     </div>
@@ -146,7 +138,7 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
                     </div>
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {event.pointsReward && (
                 <div className="bg-green-50 p-4 rounded-xl">
@@ -161,6 +153,7 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
                 </div>
               )}
 
+              {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-danger">{error}</p>}
               {!isPast && isDeadlinePassed && !isRegistered && (
                 <div className="bg-yellow-50 p-4 rounded-xl text-center">
                   <p className="text-yellow-700 font-semibold">Registration deadline has passed</p>
@@ -175,9 +168,9 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
                         <p className="text-green-700 font-semibold">✓ You're registered for this event!</p>
                       </div>
                       <button 
-                        onClick={handleUnregister} 
+                        onClick={() => updateRegistration(onUnregister)}
                         disabled={loading}
-                        className="w-full px-4 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 disabled:opacity-50"
+                        className="w-full btn-danger"
                       >
                         {loading ? 'Processing...' : 'Unregister'}
                       </button>
@@ -202,7 +195,7 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
                             navigate('/login');
                             return;
                           }
-                          handleRegister();
+                          updateRegistration(onRegister);
                         }}
                         disabled={!canClickRegister}
                         className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
