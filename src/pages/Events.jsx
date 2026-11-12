@@ -1,6 +1,7 @@
+import { callFunction } from '../firebase/callable';
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { collection, getDocs, query, where, doc, runTransaction } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { EventDetailsModal } from '../components/EventDetailsModal';
@@ -101,92 +102,23 @@ export const Events = () => {
     return myRegistrations.some(reg => reg.eventId === eventId);
   };
 
-  const handleRegister = async (eventId) => {
+  const changeRegistration = async (eventId, register) => {
     if (!currentUser?.uid) {
-      toast.info('Login required', 'Please log in to register for events.');
+      toast.info('Login required', 'Please log in to manage event registrations.');
       return;
     }
     try {
-      const registrationId = `${currentUser.uid}_${eventId}`;
-      await runTransaction(db, async (transaction) => {
-        const eventRef = doc(db, 'events', eventId);
-        const regRef = doc(db, 'eventRegistrations', registrationId);
-
-        const [eventDoc, regDoc] = await Promise.all([transaction.get(eventRef), transaction.get(regRef)]);
-        if (!eventDoc.exists()) throw new Error('Event not found.');
-        if (regDoc.exists()) throw new Error('Already registered.');
-
-        const ev = eventDoc.data();
-        const now = new Date();
-        const eventDate = ev?.date ? new Date(ev.date) : null;
-        const deadline = ev?.registrationDeadline ? new Date(ev.registrationDeadline) : null;
-
-        if (deadline && deadline < now) throw new Error('Registration deadline has passed.');
-        if (eventDate && eventDate < now) throw new Error('This event has already ended.');
-
-        const max = ev?.maxParticipants ? Number(ev.maxParticipants) : 0;
-        const current = Number(ev?.registeredCount ?? 0) || 0;
-        if (max && current >= max) throw new Error('Event is full.');
-
-        transaction.set(regRef, {
-          userId: currentUser.uid,
-          eventId,
-          registeredAt: new Date(),
-          status: 'registered',
-        });
-        transaction.update(eventRef, { registeredCount: current + 1 });
-      });
-
-      toast.success('Registered', 'Successfully registered for the event.');
-      fetchEvents();
-      fetchMyRegistrations();
-      setModalOpen(false);
+      await callFunction(register ? 'registerForEvent' : 'cancelEventRegistration', { eventId });
+      toast.success(register ? 'Registered' : 'Registration cancelled');
+      closeEventDetails();
+      await Promise.all([fetchEvents(), fetchMyRegistrations()]);
     } catch (error) {
-      console.error('Error registering:', error);
-      toast.error(
-        'Registration failed',
-        error?.code === 'permission-denied'
-          ? 'Please ensure your account is active.'
-          : error?.message === 'Already registered.'
-            ? 'You are already registered for this event.'
-            : error?.message === 'Registration deadline has passed.'
-              ? 'The registration deadline has passed.'
-              : error?.message === 'Event is full.'
-                ? 'No spots left for this event.'
-                : error?.message === 'This event has already ended.'
-                  ? 'This event has ended.'
-                  : error?.message ?? 'Please try again.'
-      );
+      toast.error(register ? 'Registration failed' : 'Cancellation failed', error.message);
     }
   };
 
-  const handleUnregister = async (eventId) => {
-    if (!currentUser?.uid) return;
-    try {
-      const registrationId = `${currentUser.uid}_${eventId}`;
-      await runTransaction(db, async (transaction) => {
-        const eventRef = doc(db, 'events', eventId);
-        const regRef = doc(db, 'eventRegistrations', registrationId);
-
-        const [eventDoc, regDoc] = await Promise.all([transaction.get(eventRef), transaction.get(regRef)]);
-        if (regDoc.exists()) {
-          transaction.delete(regRef);
-        }
-        if (eventDoc.exists()) {
-          const current = Number(eventDoc.data()?.registeredCount ?? 0) || 0;
-          transaction.update(eventRef, { registeredCount: Math.max(0, current - 1) });
-        }
-      });
-
-      toast.success('Unregistered', 'Successfully unregistered from the event.');
-      fetchEvents();
-      fetchMyRegistrations();
-      setModalOpen(false);
-    } catch (error) {
-      console.error('Error unregistering:', error);
-      toast.error('Unregister failed', 'Please try again.');
-    }
-  };
+  const handleRegister = eventId => changeRegistration(eventId, true);
+  const handleUnregister = eventId => changeRegistration(eventId, false);
 
   const openEventDetails = (event) => {
     setSelectedEvent(event);

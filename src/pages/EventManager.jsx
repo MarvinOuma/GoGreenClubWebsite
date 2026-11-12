@@ -1,5 +1,6 @@
+import { callFunction } from '../firebase/callable';
 import { useEffect, useMemo, useState } from 'react';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { imageAccept, uploadImage } from '../firebase/images';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
@@ -163,15 +164,12 @@ export const EventManager = () => {
 
   const handleDelete = async (id) => {
     try {
-      const regsQuery = query(collection(db, 'eventRegistrations'), where('eventId', '==', id));
-      const regsSnap = await getDocs(regsQuery);
-      await Promise.all(regsSnap.docs.map(d => deleteDoc(d.ref)));
-      await deleteDoc(doc(db, 'events', id));
+      await callFunction('deleteEvent', { eventId: id });
       toast.success('Deleted', 'Event deleted.');
       fetchEvents();
     } catch (error) {
       console.error('Error deleting event:', error);
-      toast.error('Delete failed', 'Failed to delete event. Please try again.');
+      toast.error('Delete failed', error.message);
     }
   };
 

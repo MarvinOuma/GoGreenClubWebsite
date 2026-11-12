@@ -1,23 +1,17 @@
+import { callFunction } from '../firebase/callable';
+import { eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, getDoc, increment } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useToast } from './ui/ToastProvider';
 import { ConfirmDialog } from './ui/ConfirmDialog';
-
-const formatDate = (value) => {
-  if (!value) return '';
-  const d = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
-  return Number.isNaN(d.getTime())
-    ? ''
-    : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
-};
 
 export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) => {
   const toast = useToast();
   const [participants, setParticipants] = useState([]);
   const [loading, setLoading] = useState(false);
   const [confirmRemoveId, setConfirmRemoveId] = useState('');
-  const [syncing, setSyncing] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen && event) {
@@ -61,54 +55,20 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
     }
   };
 
-  const syncRegisteredCount = async () => {
-    if (!event?.id) return;
-    setSyncing(true);
+  const updateParticipant = async (userId, attended) => {
+    setSaving(true);
     try {
-      await updateDoc(doc(db, 'events', event.id), { registeredCount: participants.length });
-      toast.success('Synced', 'Event registered count updated.');
-      onUpdate?.();
-    } catch (error) {
-      console.error('Error syncing registeredCount:', error);
-      toast.error('Sync failed', 'Unable to sync event registered count. Please try again.');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const markAttendance = async (regId, userId, attended) => {
-    try {
-      const updates = { attended };
-      
-      if (attended && event.pointsReward) {
-        updates.pointsAwarded = event.pointsReward;
-        await updateDoc(doc(db, 'users', userId), {
-          greenPoints: increment(event.pointsReward)
-        });
-      }
-      
-      await updateDoc(doc(db, 'eventRegistrations', regId), updates);
-      toast.success('Attendance updated', `Marked as ${attended ? 'attended' : 'absent'}.`);
-      fetchParticipants();
-      onUpdate?.();
-    } catch (error) {
-      console.error('Error marking attendance:', error);
-      toast.error('Update failed', 'Failed to mark attendance. Please try again.');
-    }
-  };
-
-  const removeParticipant = async (regId) => {
-    try {
-      await deleteDoc(doc(db, 'eventRegistrations', regId));
-      await updateDoc(doc(db, 'events', event.id), {
-        registeredCount: increment(-1)
+      const remove = attended === undefined;
+      await callFunction(remove ? 'removeEventParticipant' : 'markEventAttendance', {
+        eventId: event.id, userId, ...(remove ? {} : { attended }),
       });
-      toast.success('Removed', 'Participant removed.');
-      fetchParticipants();
+      toast.success(remove ? 'Participant removed' : 'Attendance updated');
+      await fetchParticipants();
       onUpdate?.();
     } catch (error) {
-      console.error('Error removing participant:', error);
-      toast.error('Remove failed', 'Failed to remove participant. Please try again.');
+      toast.error('Update failed', error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -122,21 +82,8 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-bold text-brand-green">Participants</h2>
-              {typeof event?.registeredCount === 'number' && event.registeredCount !== participants.length ? (
-                <p className="mt-1 text-xs font-semibold text-amber-700">
-                  Count mismatch: event shows {event.registeredCount}, registrations show {participants.length}.
-                </p>
-              ) : null}
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={syncRegisteredCount}
-                disabled={syncing}
-                className="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition disabled:opacity-60"
-              >
-                {syncing ? 'Syncing…' : 'Sync Count'}
-              </button>
               <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" aria-label="Close participants">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -147,7 +94,7 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
 
           <div className="mb-4">
             <h3 className="font-bold text-lg">{event.title}</h3>
-            <p className="text-sm text-gray-500">📅 {formatDate(event.date)}</p>
+            <p className="text-sm text-gray-500">📅 {formatEventDate(event.date)}</p>
             <p className="text-sm text-gray-600 mt-2">
               {participants.length} registered / {event.maxParticipants || '∞'} max
             </p>
@@ -163,7 +110,7 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
                 <div key={p.id} className="bg-gray-50 rounded-xl p-4 border">
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <p className="font-semibold">{p.user?.displayName || 'Unknown'}</p>
+                      <p className="font-semibold">{p.user?.name || p.user?.displayName || 'Unknown'}</p>
                       <p className="text-sm text-gray-500">{p.user?.email}</p>
                       <p className="text-xs text-gray-400 mt-1">
                         Registered: {new Date(p.registeredAt?.toDate?.() || p.registeredAt).toLocaleDateString()}
@@ -181,16 +128,18 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
                     )}
                   </div>
 
-                  {new Date(event.date) < new Date() && p.attended === undefined && (
+                  {eventStatus(event) === 'completed' && (
                     <div className="flex gap-2 mb-2">
                       <button
-                        onClick={() => markAttendance(p.id, p.userId, true)}
+                        disabled={saving || p.attended === true}
+                        onClick={() => updateParticipant(p.userId, true)}
                         className="flex-1 px-3 py-2 bg-green-500 text-white rounded-lg text-sm font-semibold"
                       >
                         Mark Attended
                       </button>
                       <button
-                        onClick={() => markAttendance(p.id, p.userId, false)}
+                        disabled={saving || p.attended === false}
+                        onClick={() => updateParticipant(p.userId, false)}
                         className="flex-1 px-3 py-2 bg-gray-400 text-white rounded-lg text-sm font-semibold"
                       >
                         Mark Absent
@@ -199,7 +148,8 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
                   )}
 
                   <button
-                    onClick={() => setConfirmRemoveId(p.id)}
+                    disabled={saving || typeof p.attended === 'boolean'}
+                    onClick={() => setConfirmRemoveId(p.userId)}
                     className="w-full px-3 py-2 bg-red-500 text-white rounded-lg text-sm font-semibold"
                   >
                     Remove
@@ -221,7 +171,7 @@ export const EventParticipantsDrawer = ({ event, isOpen, onClose, onUpdate }) =>
         onConfirm={async () => {
           const id = confirmRemoveId;
           setConfirmRemoveId('');
-          await removeParticipant(id);
+          await updateParticipant(id);
         }}
       />
     </>

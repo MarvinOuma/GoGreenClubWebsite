@@ -67,8 +67,7 @@ service cloud.firestore {
       allow create: if own(userId) &&
         request.resource.data.keys().hasOnly(['name', 'branch', 'interests']) && validProfile();
       allow update: if (own(userId) && activeMember() && validProfile() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'branch', 'interests'])) ||
-        isAdmin();
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'branch', 'interests']));
     }
 
     match /posts/{postId} {
@@ -78,18 +77,22 @@ service cloud.firestore {
 
     match /events/{eventId} {
       allow read: if resource.data.isPublic == true || isAdmin();
-      allow write: if isAdmin();
+      allow create: if isAdmin() &&
+        request.resource.data.get('registeredCount', 0) == 0 &&
+        !request.resource.data.keys().hasAny(['deleting', 'registrationCountVersion']);
+      allow update: if isAdmin() && resource.data.get('deleting', false) == false &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'registeredCount', 'deleting', 'registrationCountVersion'
+        ]);
     }
 
     match /eventRegistrations/{registrationId} {
       allow read: if own(resource.data.userId) || isAdmin();
-      allow update, delete: if isAdmin();
     }
 
     match /impactReports/{reportId} {
       allow read: if own(resource.data.userId) || isAdmin();
       allow create: if activeMember() && validReport();
-      allow update, delete: if isAdmin();
     }
 
     match /partners/{partnerId} {

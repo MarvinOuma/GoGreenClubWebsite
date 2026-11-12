@@ -1,5 +1,6 @@
+import { callFunction } from '../firebase/callable';
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { DashboardLayout } from '../layout/DashboardLayout';
 import { useToast } from '../components/ui/ToastProvider';
@@ -14,6 +15,7 @@ const formatDate = (value) => {
 
 export const ApprovalQueue = () => {
   const toast = useToast();
+  const [reviewing, setReviewing] = useState(false);
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,29 +46,17 @@ export const ApprovalQueue = () => {
     }
   };
 
-  const handleApprove = async (report) => {
+  const reviewReport = async (reportId, decision) => {
+    setReviewing(true);
     try {
-      await updateDoc(doc(db, 'impactReports', report.id), { status: 'approved' });
-      
-      const points = (parseInt(report.wasteAmount) || 0) * 5 + (parseInt(report.treesPlanted) || 0) * 10;
-      await updateDoc(doc(db, 'users', report.userId), { greenPoints: increment(points) });
-      
-      toast.success('Approved', `Report approved (+${points} points).`);
-      fetchReports();
+      const { points, changed } = await callFunction('reviewImpactReport', { reportId, decision });
+      toast.success(decision === 'approved' ? 'Approved' : 'Rejected',
+        changed && points ? `+${points} Green Points awarded.` : undefined);
+      await fetchReports();
     } catch (error) {
-      console.error('Error approving report:', error);
-      toast.error('Approve failed', 'Please try again.');
-    }
-  };
-
-  const handleReject = async (reportId) => {
-    try {
-      await updateDoc(doc(db, 'impactReports', reportId), { status: 'rejected' });
-      toast.success('Rejected', 'Report rejected.');
-      fetchReports();
-    } catch (error) {
-      console.error('Error rejecting report:', error);
-      toast.error('Reject failed', 'Please try again.');
+      toast.error('Review failed', error.message);
+    } finally {
+      setReviewing(false);
     }
   };
 
@@ -119,13 +109,15 @@ export const ApprovalQueue = () => {
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
-                    onClick={() => handleApprove(report)}
+                    disabled={reviewing}
+                    onClick={() => reviewReport(report.id, 'approved')}
                     className="flex-1 px-4 py-2 rounded-xl min-h-[44px] bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition"
                   >
                     Approve
                   </button>
                   <button
-                    onClick={() => handleReject(report.id)}
+                    disabled={reviewing}
+                    onClick={() => reviewReport(report.id, 'rejected')}
                     className="flex-1 px-4 py-2 rounded-xl min-h-[44px] bg-red-600 text-white font-semibold hover:bg-red-700 transition"
                   >
                     Reject

@@ -35,7 +35,7 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
   if (!isOpen || !event) return null;
 
   const spotsLeft = (event.maxParticipants || 0) - (event.registeredCount || 0);
-  const isFull = event.maxParticipants && spotsLeft <= 0;
+  const isFull = event.registrationCountVersion === 1 && event.maxParticipants && spotsLeft <= 0;
   const isPast = new Date(event.date) < new Date();
   const isDeadlinePassed = event.registrationDeadline && new Date(event.registrationDeadline) < new Date();
   const canRegisterBase = !isRegistered && !isFull && !isPast && !isDeadlinePassed;
