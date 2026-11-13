@@ -19,6 +19,10 @@ Set the Firebase web configuration in `.env` for an authorized development proje
 npx firebase-tools@15.9.1 emulators:start --project demo-gogreen --only auth,firestore,functions,storage
 ```
 
+## Approved club photographs
+
+Set `VITE_HOME_PHOTO_URL` to an approved HTTPS image or a root-relative path for a file under `public/`. Use `VITE_HOME_PHOTO_ALT` to describe the image when it adds context. Event Manager and Blog CMS accept approved photos and optional image descriptions. Use an empty description for decorative covers. The existing logo and editorial fallbacks cover unset and failed images.
+
 ## Verification
 
 ```sh

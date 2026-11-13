@@ -73,7 +73,7 @@ export const ApprovalQueue = () => {
   };
 
   return (
-    <DashboardLayout title="Approval Queue">
+    <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">Impact report reviews</h1>

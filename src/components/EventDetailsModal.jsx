@@ -1,3 +1,5 @@
+import { FiX } from 'react-icons/fi';
+import { EditorialPhoto } from './ui/EditorialPhoto';
 import { Dialog } from './ui/Dialog';
 import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
 import { useEffect, useId, useState } from 'react';
@@ -50,7 +52,7 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
         input.value = url.href;
         input.readOnly = true;
         input.className = 'sr-only';
-        button.closest('dialog').append(input);
+        button.parentElement.append(input);
         try {
           input.select();
           if (!document.execCommand('copy')) throw new Error('Clipboard unavailable');
@@ -66,52 +68,43 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
   };
 
   return (
-    <Dialog open={isOpen} onClose={onClose} titleId={titleId} className="dialog-panel max-w-2xl">
-          {event.imageUrl && (
-            <img src={event.imageUrl} alt={event.title} className="w-full h-48 md:h-64 object-cover rounded-t-2xl" />
-          )}
-          <div className="p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h2 id={titleId} className="text-2xl font-bold text-brand-green mb-1">{event.title}</h2>
-                <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
-                  {event.category?.toUpperCase() || 'EVENT'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={copyShareLink}
-                  className="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition"
-                >
-                  Copy link
-                </button>
-                <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" aria-label="Close">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
+    <Dialog open={isOpen} onClose={onClose} titleId={titleId} className="event-dialog">
+      <div className="flex max-h-[inherit] flex-col">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-line bg-white p-4 sm:p-5">
+          <div className="min-w-0">
+            <h2 id={titleId} tabIndex={-1} data-initial-focus className="break-words font-display text-xl font-semibold text-forest sm:text-2xl">
+              {event.title}
+            </h2>
+            <p className="mt-1 text-sm capitalize text-muted">{event.category?.replaceAll('-', ' ') || 'Event'}</p>
+          </div>
+          <button type="button" onClick={onClose} className="btn-secondary shrink-0 px-3 py-2" aria-label="Close event details">
+            <FiX size={19} aria-hidden="true" />
+          </button>
+        </header>
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5" data-event-scroll>
+          <EditorialPhoto src={event.imageUrl} alt={event.imageAlt}
+            className="mb-4 overflow-hidden rounded-xl" imageClassName="h-36 w-full object-cover sm:h-56" eager />
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <button type="button" className="btn-secondary text-sm" onClick={copyShareLink}>Copy link</button>
+          </div>
             <p role="status" className="text-sm font-semibold text-leaf empty:hidden">{shareMessage}</p>
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-muted">Description</p>
-                <p className="text-gray-700">{event.description}</p>
+                <p className="whitespace-pre-wrap break-words text-ink">{event.description}</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 min-[380px]:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted">Date</p>
                   <p className="font-semibold">📅 {formatEventDate(event.date)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted">Location</p>
-                  <p className="font-semibold">📍 {event.location}</p>
+                  <p className="break-words font-semibold">📍 {event.location}</p>
                 </div>
                 {event.registrationDeadline && (
-                  <div className="col-span-2">
+                  <div className="min-[380px]:col-span-2">
                     <p className="text-sm text-muted">Registration Deadline</p>
                     <p className={`font-semibold ${isDeadlinePassed ? 'text-danger' : ''}`}>
                       ⏰ {formatEventDate(event.registrationDeadline)} {isDeadlinePassed && '(Passed)'}
@@ -156,7 +149,7 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
               {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-danger">{error}</p>}
               {!isPast && isDeadlinePassed && !isRegistered && (
                 <div className="bg-yellow-50 p-4 rounded-xl text-center">
-                  <p className="text-yellow-700 font-semibold">Registration deadline has passed</p>
+                  <p className="text-warning font-semibold">Registration deadline has passed</p>
                 </div>
               )}
 
@@ -216,6 +209,7 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
               )}
             </div>
           </div>
+      </div>
     </Dialog>
   );
 };

@@ -60,7 +60,7 @@ export const MemberActivities = () => {
   };
 
   return (
-    <DashboardLayout title="My Activities">
+    <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl md:text-3xl font-bold text-brand-green">Activities</h1>

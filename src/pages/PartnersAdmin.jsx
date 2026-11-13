@@ -168,7 +168,7 @@ export const PartnersAdmin = () => {
   };
 
   return (
-    <DashboardLayout title="Partners">
+    <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

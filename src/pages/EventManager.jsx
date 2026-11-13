@@ -1,6 +1,6 @@
 import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
 import { callFunction } from '../firebase/callable';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, addDoc, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { discardUpload, imageAccept, uploadImage } from '../firebase/images';
 import { db } from '../firebase/firebaseConfig';
@@ -17,9 +17,16 @@ const formatInputDate = value => {
   return date ? new Intl.DateTimeFormat('sv-SE', { timeZone: 'Africa/Nairobi' }).format(date) : '';
 };
 
+function managerStatus(event) {
+  const status = eventStatus(event);
+  return status === 'upcoming' && event.status === 'ongoing' ? 'ongoing' : status;
+}
+
 export const EventManager = () => {
   const { currentUser } = useAuth();
   const toast = useToast();
+  const editorTitle = useRef(null);
+  const editorTrigger = useRef(null);
   const [events, setEvents] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -31,6 +38,7 @@ export const EventManager = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [confirmDeleteId, setConfirmDeleteId] = useState('');
+  const [deletingId, setDeletingId] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -41,8 +49,12 @@ export const EventManager = () => {
     registrationDeadline: '',
     pointsReward: '',
     isPublic: true,
-    imageUrl: ''
+    imageUrl: '', imageAlt: ''
   });
+
+  useEffect(() => {
+    if (showForm) editorTitle.current?.focus();
+  }, [showForm, editingId]);
 
   useEffect(() => {
     fetchEvents();
@@ -100,6 +112,7 @@ export const EventManager = () => {
         maxParticipants: formData.maxParticipants ? parseInt(formData.maxParticipants) : null,
         pointsReward: formData.pointsReward ? parseInt(formData.pointsReward) : null,
         imageUrl,
+        imageAlt: formData.imageAlt.trim(),
         ...(uploaded ? { imagePath: uploaded.path } : {}),
         status: original?.status ?? 'upcoming'
       };
@@ -117,7 +130,7 @@ export const EventManager = () => {
       }
 
       uploaded = undefined;
-      setFormData({ title: '', description: '', date: '', location: '', category: 'cleanup', maxParticipants: '', registrationDeadline: '', pointsReward: '', isPublic: true, imageUrl: '' });
+      setFormData({ title: '', description: '', date: '', location: '', category: 'cleanup', maxParticipants: '', registrationDeadline: '', pointsReward: '', isPublic: true, imageUrl: '', imageAlt: '' });
       setImageFile(null);
       setImagePreviewUrl('');
       setShowForm(false);
@@ -142,7 +155,8 @@ export const EventManager = () => {
     }
   };
 
-  const handleEdit = (event) => {
+  const handleEdit = (event, trigger) => {
+    editorTrigger.current = trigger;
     setFormData({
       title: event.title,
       description: event.description,
@@ -153,7 +167,8 @@ export const EventManager = () => {
       registrationDeadline: formatInputDate(event.registrationDeadline),
       pointsReward: event.pointsReward || '',
       isPublic: event.isPublic !== false,
-      imageUrl: event.imageUrl || ''
+      imageUrl: event.imageUrl || '',
+      imageAlt: event.imageAlt || ''
     });
     setEditingId(event.id);
     setImageFile(null);
@@ -162,13 +177,16 @@ export const EventManager = () => {
   };
 
   const handleDelete = async (id) => {
+    setDeletingId(id);
     try {
       await callFunction('deleteEvent', { eventId: id });
       toast.success('Deleted', 'Event deleted.');
-      fetchEvents();
     } catch (error) {
       console.error('Error deleting event:', error);
-      toast.error('Delete failed', error.message);
+      toast.error('Deletion interrupted', 'The event may already be hidden. Retry deletion from Event Manager.');
+    } finally {
+      await fetchEvents();
+      setDeletingId('');
     }
   };
 
@@ -189,15 +207,19 @@ export const EventManager = () => {
   };
 
   const resetForm = () => {
-    setFormData({ title: '', description: '', date: '', location: '', category: 'cleanup', maxParticipants: '', registrationDeadline: '', pointsReward: '', isPublic: true, imageUrl: '' });
+    setFormData({ title: '', description: '', date: '', location: '', category: 'cleanup', maxParticipants: '', registrationDeadline: '', pointsReward: '', isPublic: true, imageUrl: '', imageAlt: '' });
     setImageFile(null);
     setImagePreviewUrl('');
     setEditingId(null);
     setShowForm(false);
+    requestAnimationFrame(() => {
+      const target = editorTrigger.current?.isConnected ? editorTrigger.current : document.getElementById('create-event');
+      target?.focus();
+    });
   };
 
   const getStatusBadge = (event) => {
-    const status = eventStatus(event);
+    const status = managerStatus(event);
     const colors = {
       upcoming: 'bg-blue-100 text-blue-700',
       ongoing: 'bg-green-100 text-green-700',
@@ -215,39 +237,39 @@ export const EventManager = () => {
         e?.title?.toLowerCase?.().includes(q) ||
         e?.description?.toLowerCase?.().includes(q) ||
         e?.location?.toLowerCase?.().includes(q);
-      const status = eventStatus(e);
+      const status = managerStatus(e);
       const matchesStatus = statusFilter === 'all' || status === statusFilter;
       return matchesSearch && matchesStatus;
     });
   }, [events, search, statusFilter]);
 
   return (
-    <DashboardLayout title="Event Manager">
+    <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">Event Manager</h1>
             <p className="mt-2 text-sm text-gray-600">Create, publish, and manage event registrations.</p>
           </div>
-          <button onClick={() => showForm ? resetForm() : setShowForm(true)} className="btn-primary text-sm md:text-base">
-            {showForm ? 'Cancel' : '+ Create Event'}
-          </button>
+          {!showForm && <button type="button" id="create-event" onClick={event => { editorTrigger.current = event.currentTarget; setShowForm(true); }} className="btn-primary self-start text-sm">
+            Create event
+          </button>}
         </div>
 
         <EventStatsOverview />
 
         {showForm && (
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+          <div className="panel p-4 sm:p-6">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
-                <h2 className="text-xl font-extrabold tracking-tight text-gray-900">{editingId ? 'Edit Event' : 'Create New Event'}</h2>
+                <h2 ref={editorTitle} tabIndex={-1} className="scroll-mt-24 text-xl font-extrabold tracking-tight text-gray-900">{editingId ? 'Edit Event' : 'Create New Event'}</h2>
                 <p className="mt-1 text-sm text-gray-600">Add details, image, and visibility.</p>
               </div>
               {editingId ? <span className="text-xs font-bold rounded-full bg-gray-100 text-gray-700 px-3 py-1">Editing</span> : null}
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                <div className="sm:col-span-2">
                   <label htmlFor="eventmanager-event-title" className="block text-sm font-semibold text-gray-700 mb-2">Event Title *</label>
                   <input id="eventmanager-event-title"
                     type="text"
@@ -259,7 +281,7 @@ export const EventManager = () => {
                   />
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="sm:col-span-2">
                   <label htmlFor="eventmanager-description" className="block text-sm font-semibold text-gray-700 mb-2">Description *</label>
                   <textarea id="eventmanager-description"
                     placeholder="Join us for a community beach cleanup..."
@@ -345,7 +367,7 @@ export const EventManager = () => {
                   />
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="sm:col-span-2">
                   <label htmlFor="eventmanager-event-image" className="block text-sm font-semibold text-gray-700 mb-2">Event Image</label>
                   <input id="eventmanager-event-image"
                     type="file"
@@ -353,6 +375,12 @@ export const EventManager = () => {
                     onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
                     className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm"
                   />
+                  <p className="mt-2 text-xs text-muted">Use an approved club photo. JPEG, PNG, WebP or GIF up to 5 MB.</p>
+                  {(imageFile || formData.imageUrl) && <label className="mt-3 block text-sm font-semibold">
+                    Image description <span className="font-normal text-muted">(optional)</span>
+                    <input className="form-control mt-1" value={formData.imageAlt} maxLength={180}
+                      onChange={event => setFormData({ ...formData, imageAlt: event.target.value })} />
+                  </label>}
                   <div className="mt-3 overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
                     {imagePreviewUrl || formData.imageUrl ? (
                       <img
@@ -369,7 +397,7 @@ export const EventManager = () => {
                   </div>
                 </div>
 
-                <div className="md:col-span-2 flex items-center gap-2">
+                <div className="sm:col-span-2 flex items-center gap-2">
                   <input
                     type="checkbox"
                     id="isPublic"
@@ -381,9 +409,12 @@ export const EventManager = () => {
                 </div>
               </div>
 
-              <button type="submit" disabled={uploading} className="w-full btn-primary disabled:opacity-50">
-                {uploading ? 'Uploading...' : editingId ? 'Update Event' : 'Create Event'}
-              </button>
+              <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-4">
+                <button type="button" onClick={resetForm} disabled={uploading} className="btn-secondary text-sm">Cancel</button>
+                <button type="submit" disabled={uploading} className="btn-primary text-sm">
+                  {uploading ? 'Saving…' : editingId ? 'Update event' : 'Create event'}
+                </button>
+              </div>
             </form>
           </div>
         )}
@@ -394,7 +425,7 @@ export const EventManager = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Search managed events" placeholder="Search events"
-              className="w-full form-control md:col-span-2"
+              className="w-full form-control sm:col-span-2"
             />
             <select
               value={statusFilter}
@@ -418,7 +449,7 @@ export const EventManager = () => {
                   <h3 className="text-lg font-extrabold tracking-tight text-gray-900 mb-1">{event.title}</h3>
                   <span className="text-xs text-gray-500 uppercase">{event.category || 'General'}</span>
                 </div>
-                {getStatusBadge(event)}
+                {event.deleting ? <span className="shrink-0 text-xs font-semibold text-warning">Deletion pending</span> : getStatusBadge(event)}
               </div>
 
               {event.imageUrl && (
@@ -439,16 +470,17 @@ export const EventManager = () => {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => viewParticipants(event)} className="flex-1 px-3 py-2 bg-gray-900 text-white rounded-xl text-sm font-semibold min-h-[44px] hover:bg-gray-800 transition">
+                <button disabled={event.deleting} onClick={() => viewParticipants(event)} className="flex-1 px-3 py-2 bg-gray-900 text-white rounded-xl text-sm font-semibold min-h-[44px] hover:bg-gray-800 transition">
                   Participants ({event.registeredCount || 0})
                 </button>
-                <button onClick={() => handleEdit(event)} className="px-4 py-2 bg-leaf text-white rounded-xl text-sm font-semibold min-h-[44px] hover:bg-emerald-700 transition">Edit</button>
+                <button disabled={event.deleting} onClick={click => handleEdit(event, click.currentTarget)} className="px-4 py-2 bg-leaf text-white rounded-xl text-sm font-semibold min-h-[44px] hover:bg-emerald-700 transition">Edit</button>
               </div>
 
               <div className="flex gap-2 mt-2">
-                {event.status !== 'cancelled' && (
+                {event.status !== 'cancelled' && !event.deleting && (
                   <select
-                    value={eventStatus(event)}
+                    aria-label={`Status for ${event.title}`}
+                    value={managerStatus(event)}
                     onChange={(e) => updateStatus(event.id, e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm shadow-sm"
                   >
@@ -458,7 +490,7 @@ export const EventManager = () => {
                     <option value="cancelled">Cancelled</option>
                   </select>
                 )}
-                <button onClick={() => setConfirmDeleteId(event.id)} className="px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold min-h-[44px] hover:bg-red-700 transition">Delete</button>
+                <button type="button" disabled={!!deletingId} onClick={() => setConfirmDeleteId(event.id)} className="btn-danger text-sm">{deletingId === event.id ? 'Deleting…' : event.deleting ? 'Retry deletion' : 'Delete'}</button>
               </div>
             </div>
           ))}
@@ -474,8 +506,9 @@ export const EventManager = () => {
         <ConfirmDialog
           open={!!confirmDeleteId}
           title="Delete this event?"
-          description="This will permanently delete the event and all registrations for it. This action cannot be undone."
+          description="The event is hidden first. The server then removes its registrations, attendance records, and tracked cover photo before deleting the event. Awarded Green Points and award history are retained. Photo cleanup can also retry in the background. Older photos without a tracked file path require separate cleanup."
           confirmLabel="Delete event"
+          cancelLabel="Keep event"
           tone="danger"
           onCancel={() => setConfirmDeleteId('')}
           onConfirm={async () => {

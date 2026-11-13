@@ -59,7 +59,7 @@ export const MemberProfile = () => {
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   return (
-    <DashboardLayout title="My Profile">
+    <DashboardLayout>
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl md:text-3xl font-bold text-brand-green mb-6">Edit Profile</h1>
         {loadError ? (

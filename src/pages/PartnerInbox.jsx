@@ -98,7 +98,7 @@ export const PartnerInbox = () => {
   };
 
   return (
-    <DashboardLayout title="Partner Inbox">
+    <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
           <p className="text-xs font-semibold text-gray-500">Admin</p>

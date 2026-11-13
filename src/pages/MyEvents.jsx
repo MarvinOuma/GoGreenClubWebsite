@@ -56,7 +56,7 @@ export const MyEvents = () => {
   const missedRegs = pastRegs.filter(reg => reg.attended === false);
 
   return (
-    <DashboardLayout title="My Events">
+    <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-8">
         {loading ? (
           <div className="space-y-6">

@@ -1,3 +1,4 @@
+import { EditorialPhoto } from '../components/ui/EditorialPhoto';
 import { FiFeather } from 'react-icons/fi';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -121,24 +122,14 @@ const TagPills = ({ tags, activeTag, onTagClick }) => (
 );
 
 const BlogCard = ({ post, activeTag, onTagClick }) => {
-  const imageUrl = post?.coverImageUrl;
   return (
     <article
       className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="relative h-44 overflow-hidden bg-gray-100">
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={post?.title ?? 'Blog cover'}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            loading="lazy"
-          />
-        ) : (
-          <div className="editorial-cover h-full" aria-hidden="true">
-            <FiFeather size={32} />
-          </div>
-        )}
+        <EditorialPhoto src={post?.coverImageUrl} alt={post?.coverImageAlt} className="h-full"
+          imageClassName="h-full w-full object-cover"
+          fallback={<div className="editorial-cover h-full" aria-hidden="true"><FiFeather size={32} /></div>} />
       </div>
       <div className="space-y-3 p-5">
         <div className="space-y-1">
@@ -165,18 +156,9 @@ const FeaturedPost = ({ post, activeTag, onTagClick }) => {
     <div className="overflow-hidden rounded-3xl border border-green-100 bg-gradient-to-br from-white to-green-50 shadow-sm">
       <div className="grid gap-0 md:grid-cols-2">
         <div className="relative h-56 overflow-hidden bg-gray-100 md:h-full">
-          {post?.coverImageUrl ? (
-            <img
-              src={post.coverImageUrl}
-              alt={post?.title ?? 'Featured post'}
-              className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
-              loading="lazy"
-            />
-          ) : (
-            <div className="editorial-cover h-full" aria-hidden="true">
-              <FiFeather size={40} />
-            </div>
-          )}
+          <EditorialPhoto src={post?.coverImageUrl} alt={post?.coverImageAlt} className="h-full"
+            imageClassName="h-full w-full object-cover"
+            fallback={<div className="editorial-cover h-full" aria-hidden="true"><FiFeather size={40} /></div>} />
           <div className="absolute left-4 top-4 rounded-full bg-brand-green px-3 py-1 text-xs font-bold text-white shadow-sm">
             Featured
           </div>

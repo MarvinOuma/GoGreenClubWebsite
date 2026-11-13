@@ -9,6 +9,7 @@ export function Dialog({ open, onClose, titleId, descriptionId, className, child
     const dialog = ref.current;
     const trigger = document.activeElement;
     dialog.showModal();
+    dialog.querySelector('[data-initial-focus]')?.focus({ preventScroll: true });
     return () => {
       dialog.close();
       if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus();

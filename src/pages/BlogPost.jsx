@@ -1,3 +1,4 @@
+import { EditorialPhoto } from '../components/ui/EditorialPhoto';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
@@ -115,16 +116,8 @@ export const BlogPost = () => {
         </Link>
 
         <article className="panel mt-6 overflow-hidden">
-          {post?.coverImageUrl ? (
-            <div className="relative h-72 w-full overflow-hidden bg-gray-100 sm:h-96">
-              <img
-                src={post.coverImageUrl}
-                alt={post?.title ?? 'Blog cover'}
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
-            </div>
-          ) : null}
+          <EditorialPhoto src={post?.coverImageUrl} alt={post?.coverImageAlt}
+            className="overflow-hidden" imageClassName="h-56 w-full object-cover sm:h-96" />
 
           <div className="p-6 sm:p-10">
             <h1 className="site-section-heading">

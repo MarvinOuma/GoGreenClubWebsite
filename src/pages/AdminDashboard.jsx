@@ -44,7 +44,7 @@ export const AdminDashboard = () => {
   }, []);
 
   return (
-    <DashboardLayout title="Command Center">
+    <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
         {loading ? (
           <div className="space-y-6">

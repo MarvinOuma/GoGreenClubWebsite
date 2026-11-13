@@ -158,7 +158,7 @@ export const UserManagement = () => {
   };
 
   return (
-    <DashboardLayout title="User Management">
+    <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm w-full">

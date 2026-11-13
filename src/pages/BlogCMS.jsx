@@ -75,6 +75,7 @@ const initialForm = {
   title: '',
   content: '',
   authorName: '',
+  coverImageAlt: '',
   tagsText: '',
   isPublished: false,
 };
@@ -126,6 +127,7 @@ export const BlogCMS = () => {
         title: formData.title.trim(),
         content: formData.content,
         authorName: formData.authorName.trim(),
+        coverImageAlt: formData.coverImageAlt.trim(),
         tags: parseTags(formData.tagsText),
         isPublished: !!formData.isPublished,
         updatedAt: new Date(),
@@ -180,6 +182,7 @@ export const BlogCMS = () => {
       title: post?.title ?? '',
       content: post?.content ?? '',
       authorName: post?.authorName ?? '',
+      coverImageAlt: post?.coverImageAlt ?? '',
       tagsText: (post?.tags ?? []).join(', '),
       isPublished: !!post?.isPublished,
     });
@@ -218,7 +221,7 @@ export const BlogCMS = () => {
   }, [imageFile]);
 
   return (
-    <DashboardLayout title="Blog CMS">
+    <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-6">
         <Toast toast={toast} onClose={() => setToast(null)} />
 
@@ -317,10 +320,10 @@ export const BlogCMS = () => {
                     onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
                     className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm"
                   />
-                  <p className="mt-1 text-xs text-gray-500">Optional. Recommended: landscape image.</p>
+                  <p className="mt-1 text-xs text-gray-500">Use an approved club photo. JPEG, PNG, WebP or GIF up to 5 MB.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900">Preview</label>
+                  <p className="block text-sm font-semibold text-gray-900">Preview</p>
                   <div className="mt-2 overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
                     {imagePreviewUrl || existingCoverUrl ? (
                       <img
@@ -336,6 +339,12 @@ export const BlogCMS = () => {
                   </div>
                 </div>
               </div>
+
+              {(imageFile || existingCoverUrl) && <label className="block text-sm font-semibold">
+                Image description <span className="font-normal text-muted">(optional)</span>
+                <input className="form-control mt-1" value={formData.coverImageAlt} maxLength={180}
+                  onChange={event => setFormData({ ...formData, coverImageAlt: event.target.value })} />
+              </label>}
 
               <label className="flex items-center space-x-2">
                 <input

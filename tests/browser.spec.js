@@ -58,12 +58,12 @@ test('public routes fit mobile, tablet, and desktop with labeled navigation', as
       await page.goto(path);
       await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
       await hasNoOverflow(page);
-      if ([390, 1280].includes(width)) await capture(page, `after-${name}-${width}`);
+      await capture(page, `after-${name}-${width}`);
     }
-    if (width < 500) {
-      const toggle = page.getByRole('button', { name: 'Open menu' });
+    if (width < 1024) {
+      const toggle = page.getByRole('button', { name: 'Menu', exact: true });
       await toggle.click();
-      await expect(page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Events' })).toBeVisible();
+      await expect(page.getByRole('navigation', { name: 'Public pages' }).getByRole('link', { name: 'Events' })).toBeVisible();
       if (width === 390) await capture(page, 'after-mobile-menu-390');
       await page.keyboard.press('Escape');
       await expect(toggle).toBeFocused();
@@ -90,6 +90,50 @@ test('keyboard event details trap focus, dismiss on Escape, and restore focus', 
   await expect(modal).toBeVisible();
 });
 
+test('long event details scroll independently at 320px with the close control in view', async ({ page }) => {
+  const event = db.doc(`events/${eventId}`);
+  const description = (await event.get()).get('description');
+  await event.update({ description: Array(30).fill(description).join('\n\n') });
+  try {
+    await page.setViewportSize({ width: 320, height: 480 });
+    await page.goto(`/events?event=${eventId}`);
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading')).toBeFocused();
+    const body = dialog.locator('[data-event-scroll]');
+    await expect.poll(() => body.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+    await body.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await expect(dialog.getByRole('button', { name: /login to register/i })).toBeInViewport();
+    await expect(dialog.getByRole('button', { name: 'Close event details' })).toBeInViewport();
+    await capture(page, 'after-event-dialog-scroll-320');
+    await dialog.getByRole('button', { name: 'Close event details' }).click();
+    await expect(dialog).toBeHidden();
+  } finally {
+    await event.update({ description });
+  }
+});
+
+test('editorial photos support alt text and fall back when unavailable', async ({ page }) => {
+  const event = db.doc(`events/${eventId}`);
+  const imageUrl = 'https://example.test/local-photo-fixture.png';
+  await event.update({ imageUrl, imageAlt: 'Event image test fixture' });
+  await page.route(imageUrl, route => route.fulfill({
+    contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jSxkAAAAASUVORK5CYII=', 'base64'),
+  }));
+  try {
+    await page.goto('/events');
+    await expect(page.getByRole('img', { name: 'Event image test fixture' })).toBeVisible();
+    await page.unroute(imageUrl);
+    await page.route(imageUrl, route => route.abort());
+    await page.reload();
+    await expect(page.getByRole('button', { name: /details for Emulator event fixture/i })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Event image test fixture' })).toHaveCount(0);
+    await expect(page.locator('.editorial-cover').first()).toBeVisible();
+  } finally {
+    await event.update({ imageUrl: '', imageAlt: '' });
+  }
+});
+
 test('blog card links and article deep links work after refresh', async ({ page }) => {
   await page.goto('/blog');
   await page.getByRole('link', { name: 'Read More' }).first().click();
@@ -104,18 +148,33 @@ test('member can register, see the event, cancel, and access the mobile dashboar
     await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
     await expect(page.getByRole('heading', { name: 'Test Member' })).toBeVisible();
     await hasNoOverflow(page);
-    if ([390, 1280].includes(width)) await capture(page, `after-member-${width}`);
-    if (width === 390) {
-      await page.getByRole('button', { name: 'Open dashboard navigation' }).click();
-      await expect(page.getByRole('dialog', { name: 'Impact Hub' })).toBeVisible();
-      await capture(page, 'after-member-menu-390');
+    await capture(page, `after-member-${width}`);
+    if (width < 1024) {
+      const trigger = page.getByRole('button', { name: 'Menu', exact: true });
+      await expect(trigger).toHaveCount(1);
+      await trigger.focus();
+      await page.keyboard.press('Enter');
+      const menu = page.getByRole('dialog', { name: 'GoGreen Club menu' });
+      const memberNav = menu.getByRole('navigation', { name: 'Impact Hub' });
+      await expect(memberNav.getByRole('link')).toHaveCount(4);
+      await expect(memberNav.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
+      await expect(menu.getByRole('navigation', { name: 'Command Center' })).toHaveCount(0);
+      if (width === 390) await capture(page, 'after-member-menu-390');
       await page.keyboard.press('Escape');
+      await expect(trigger).toBeFocused();
     }
   }
   await page.goto(`/events?event=${eventId}`);
   const modal = page.getByRole('dialog');
   await modal.getByRole('button', { name: /register for event/i }).click();
   await expect(modal).toBeHidden();
+  await page.goto('/events');
+  const filter = page.getByRole('checkbox', { name: 'My registrations only' });
+  await filter.focus();
+  await page.keyboard.press('Space');
+  await expect(filter).toBeChecked();
+  await expect(page.getByRole('button', { name: /details for Emulator event fixture/i })).toBeVisible();
+  await capture(page, 'after-registration-filter');
   await page.goto('/member/events');
   await expect(page.getByText('Emulator event fixture').first()).toBeVisible();
   await page.goto(`/events?event=${eventId}`);
@@ -131,20 +190,43 @@ test('admin dashboard, form and confirmation are usable on narrow screens', asyn
     await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
     await expect(page.getByRole('heading', { name: 'Command Center' })).toBeVisible();
     await hasNoOverflow(page);
-    if ([390, 1280].includes(width)) await capture(page, `after-admin-${width}`);
+    await capture(page, `after-admin-${width}`);
+    if (width < 1024) {
+      const trigger = page.getByRole('button', { name: 'Menu', exact: true });
+      await expect(trigger).toHaveCount(1);
+      await trigger.click();
+      const menu = page.getByRole('dialog', { name: 'GoGreen Club menu' });
+      await expect(menu.getByRole('navigation', { name: 'Command Center' }).getByRole('link')).toHaveCount(7);
+      await expect(menu.getByRole('navigation', { name: 'Impact Hub' }).getByRole('link')).toHaveCount(4);
+      if (width === 390) await capture(page, 'after-admin-menu-390');
+      await page.keyboard.press('Escape');
+      await expect(trigger).toBeFocused();
+    }
+  }
+  await page.goto('/admin/events');
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+    await page.getByRole('button', { name: 'Create event', exact: true }).click();
+    await expect(page.getByLabel(/event title/i)).toBeVisible();
+    await hasNoOverflow(page);
+    if (width === 390) {
+      await page.getByRole('heading', { name: 'Create New Event' }).scrollIntoViewIfNeeded();
+      await capture(page, 'after-admin-event-form-390');
+      await page.getByRole('button', { name: 'Cancel', exact: true }).scrollIntoViewIfNeeded();
+      await capture(page, 'after-admin-event-actions-390');
+    }
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/admin/events');
-  await page.getByRole('button', { name: /new event|add event|create event/i }).click();
-  await expect(page.getByLabel(/event title/i)).toBeVisible();
-  await hasNoOverflow(page);
-  await capture(page, 'after-admin-event-form-390');
-  await page.getByRole('button', { name: /^(cancel|close)$/i }).first().click();
-  await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  const remove = page.getByRole('button', { name: 'Delete', exact: true }).first();
+  await remove.click();
+  const dialog = page.getByRole('dialog', { name: 'Delete this event?' });
+  await expect(dialog.getByText(/Awarded Green Points and award history are retained/)).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Keep event' })).toBeFocused();
   await capture(page, 'after-confirmation-390');
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(dialog).toBeHidden();
+  await expect(remove).toBeFocused();
 });
 
 test('administrator creates an event and publishes a draft through the CMS', async ({ page, browser }) => {
@@ -155,7 +237,7 @@ test('administrator creates an event and publishes a draft through the CMS', asy
   await page.getByLabel(/description/i).fill('Local verification only.');
   await page.getByLabel(/event date/i).fill('2091-05-02');
   await page.getByLabel(/location/i).fill('Local test venue');
-  await page.getByRole('button', { name: 'Create Event', exact: true }).click();
+  await page.getByRole('button', { name: /^create event$/i }).click();
   await expect(page.getByRole('heading', { name: 'Admin-created emulator event' })).toBeVisible();
 
   await page.goto('/admin/blog');
@@ -186,17 +268,44 @@ test('administrator creates an event and publishes a draft through the CMS', asy
   }
 });
 
-test('public pages and the event dialog pass automated accessibility checks', async ({ page }) => {
+test('public routes, dialogs, and dashboards pass automated accessibility checks', async ({ page, browser }) => {
+  const scan = async target => {
+    const result = await new AxeBuilder({ page: target }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    expect(result.violations.map(({ id, nodes }) => [id, nodes.map(node => [node.target, node.failureSummary])])).toEqual([]);
+  };
   for (const [, path, heading] of publicRoutes) {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
-    const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
-    expect(scan.violations.map(({ id, nodes }) => [id, nodes.map(node => [node.target, node.failureSummary])])).toEqual([]);
+    await scan(page);
   }
   await page.goto(`/events?event=${eventId}`);
   await expect(page.getByRole('dialog')).toBeVisible();
-  const scan = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
-  expect(scan.violations.map(({ id, nodes }) => [id, nodes.map(node => [node.target, node.failureSummary])])).toEqual([]);
+  await scan(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, memberEmail);
+  await expect(page.getByRole('heading', { name: 'Your impact' })).toBeVisible();
+  await scan(page);
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await scan(page);
+
+  const adminContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const admin = await adminContext.newPage();
+  try {
+    await signIn(admin, adminEmail);
+    await expect(admin.getByRole('heading', { level: 1, name: 'Command Center' })).toBeVisible();
+    await scan(admin);
+    await admin.goto('/admin/events');
+    await admin.getByRole('button', { name: 'Create event', exact: true }).click();
+    await expect(admin.getByRole('heading', { name: 'Create New Event' })).toBeFocused();
+    await scan(admin);
+    await admin.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(admin.getByRole('button', { name: 'Create event', exact: true })).toBeFocused();
+    await admin.getByRole('button', { name: 'Delete', exact: true }).first().click();
+    await scan(admin);
+  } finally {
+    await adminContext.close();
+  }
 });
 
 test('email signup and profile completion work with the Auth trigger', async ({ page }) => {

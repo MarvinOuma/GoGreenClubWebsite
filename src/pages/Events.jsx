@@ -1,8 +1,9 @@
+import { EditorialPhoto } from '../components/ui/EditorialPhoto';
 import { FiCalendar, FiMapPin } from 'react-icons/fi';
 import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
 import { callFunction } from '../firebase/callable';
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
@@ -42,7 +43,7 @@ export const Events = () => {
   useEffect(() => {
     fetchEvents();
     if (currentUser) fetchMyRegistrations();
-    else setMyRegistrations([]);
+    else { setMyRegistrations([]); setRegisteredOnly(false); }
   }, [currentUser]);
 
   // Debounce search input
@@ -121,7 +122,9 @@ export const Events = () => {
   const closeEventDetails = () => changeEventDetails(null, true);
 
   const upcomingEvents = events.filter(event => eventStatus(event) === 'upcoming');
-  const pastEvents = events.filter(event => eventStatus(event) === 'completed');
+  const registeredSet = useMemo(() => new Set(myRegistrations.map(record => record.eventId)), [myRegistrations]);
+  const pastEvents = events.filter(event => eventStatus(event) === 'completed' &&
+    (!registeredOnly || registeredSet.has(event.id)));
   
   const filteredEvents = useMemo(() => {
     let filtered = upcomingEvents;
@@ -137,12 +140,9 @@ export const Events = () => {
         e.category?.toLowerCase().includes(search)
       );
     }
-    if (registeredOnly && currentUser?.uid) {
-      const regSet = new Set(myRegistrations.map((r) => r.eventId));
-      filtered = filtered.filter((e) => regSet.has(e.id));
-    }
+    if (registeredOnly) filtered = filtered.filter(event => registeredSet.has(event.id));
     return filtered;
-  }, [upcomingEvents, filter, debouncedSearch, registeredOnly, currentUser?.uid, myRegistrations]);
+  }, [upcomingEvents, filter, debouncedSearch, registeredOnly, registeredSet]);
 
   const visibleEvents = filteredEvents.slice(0, visibleCount);
   const categoryOptions = useMemo(() => {
@@ -151,7 +151,6 @@ export const Events = () => {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [upcomingEvents]);
 
-  const registeredSet = useMemo(() => new Set(myRegistrations.map((r) => r.eventId)), [myRegistrations]);
   const featuredEvent = visibleEvents[0] ?? null;
   const gridEvents = featuredEvent ? visibleEvents.slice(1) : visibleEvents;
 
@@ -226,27 +225,18 @@ export const Events = () => {
               </button>
             )}
           </div>
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-                <div>
-                  <p className="text-xs font-semibold text-gray-500">Show</p>
-                  <p className="text-sm font-bold text-gray-900">{registeredOnly ? 'Registered only' : 'All events'}</p>
-                </div>
-                <button
-                  type="button"
-                  disabled={!currentUser?.uid}
-                  onClick={() => setRegisteredOnly((v) => !v)}
-                  className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
-                    !currentUser?.uid
-                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                      : registeredOnly
-                        ? 'bg-leaf text-white hover:bg-emerald-700'
-                        : 'bg-white text-gray-900 ring-1 ring-gray-200 hover:bg-gray-50'
-                  }`}
-                  title={!currentUser?.uid ? 'Login to use this filter' : undefined}
-                >
-                  Toggle
-                </button>
-              </div>
+              {currentUser ? (
+                <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-line bg-ivory px-3 text-sm font-semibold text-forest">
+                  <input type="checkbox" checked={registeredOnly}
+                    onChange={event => setRegisteredOnly(event.target.checked)}
+                    className="size-5 shrink-0 accent-leaf" />
+                  My registrations only
+                </label>
+              ) : (
+                <p className="flex flex-wrap items-center gap-x-1 rounded-lg bg-ivory px-3 py-2 text-sm text-muted">
+                  <Link to="/login" className="font-semibold text-leaf underline">Sign in</Link> to filter by your registrations.
+                </p>
+              )}
             </div>
           </div>
 
@@ -284,7 +274,7 @@ export const Events = () => {
         {filteredEvents.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg mb-2">
-              {debouncedSearch ? 'No events match your search.' : 'No upcoming events in this category'}
+              {debouncedSearch ? 'No events match your search.' : registeredOnly ? 'No upcoming registrations match these filters.' : 'No upcoming events in this category.'}
             </p>
             {debouncedSearch && (
               <button onClick={() => setSearchQuery('')} className="text-brand-green font-semibold hover:underline">
@@ -300,18 +290,10 @@ export const Events = () => {
               >
                 <div className="grid gap-0 md:grid-cols-2">
                   <div className="relative h-56 overflow-hidden bg-gray-100 md:h-full">
-                    {featuredEvent.imageUrl ? (
-                      <img
-                        src={featuredEvent.imageUrl}
-                        alt={featuredEvent.title}
-                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="editorial-cover h-full" aria-hidden="true">
-                        <FiCalendar size={38} />
-                      </div>
-                    )}
+                    <EditorialPhoto src={featuredEvent.imageUrl} alt={featuredEvent.imageAlt}
+                      className="h-full overflow-hidden"
+                      imageClassName="h-full w-full object-cover"
+                      fallback={<div className="editorial-cover h-full" aria-hidden="true"><FiCalendar size={38} /></div>} />
                     <div className="absolute left-4 top-4 rounded-full bg-leaf px-3 py-1 text-xs font-bold text-white shadow-sm">
                       Featured
                     </div>
@@ -361,18 +343,10 @@ export const Events = () => {
                     key={event.id} 
                     className="group relative bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer"
                   >
-                    {event.imageUrl ? (
-                      <div className="relative h-40 overflow-hidden bg-gray-100">
-                        <img
-                          src={event.imageUrl}
-                          alt={event.title}
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                          loading="lazy"
-                        />
-                      </div>
-                    ) : (
-                      <div className="editorial-cover h-40" aria-hidden="true"><FiCalendar size={32} /></div>
-                    )}
+                    <EditorialPhoto src={event.imageUrl} alt={event.imageAlt}
+                      className="h-40 overflow-hidden"
+                      imageClassName="h-full w-full object-cover"
+                      fallback={<div className="editorial-cover h-40" aria-hidden="true"><FiCalendar size={32} /></div>} />
                     <div className="p-5">
                       <div className="flex items-start justify-between mb-2 gap-2">
                         <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">

@@ -21,6 +21,8 @@ export default defineConfig({
       VITE_FIREBASE_AUTH_DOMAIN: 'demo-gogreen.firebaseapp.com',
       VITE_FIREBASE_STORAGE_BUCKET: 'demo-gogreen.appspot.com',
       VITE_FIREBASE_APP_CHECK_SITE_KEY: '',
+      VITE_HOME_PHOTO_URL: '',
+      VITE_HOME_PHOTO_ALT: '',
     },
   },
 });

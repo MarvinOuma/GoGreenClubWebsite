@@ -1,3 +1,4 @@
+import { EditorialPhoto } from '../components/ui/EditorialPhoto';
 import { webUrl } from '../lib/webUrl';
 import { StatCard } from '../components/ui/StatCard';
 import { FiArrowDownRight, FiArrowUpRight, FiCalendar, FiMapPin, FiFeather } from 'react-icons/fi';
@@ -16,6 +17,10 @@ import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from '
 import { db, functions } from '../firebase/firebaseConfig';
 import { httpsCallable } from 'firebase/functions';
 import { useToast } from '../components/ui/ToastProvider';
+
+const configuredPhoto = import.meta.env.VITE_HOME_PHOTO_URL?.trim();
+const heroPhotoUrl = configuredPhoto?.startsWith('/') && !configuredPhoto.startsWith('//')
+  ? configuredPhoto : webUrl(configuredPhoto);
 
 const toJsDate = (value) => {
   if (!value) return null;
@@ -56,21 +61,12 @@ const PrimaryButton = ({ to, children, className = '' }) => (
   </Link>
 );
 
-const BlogCard = ({ imageUrl, title, author, hashtag, to }) => (
+const BlogCard = ({ imageUrl, imageAlt, title, author, hashtag, to }) => (
   <article className="group overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
     <div className="relative h-40 overflow-hidden bg-gray-100">
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={title ? `${title} cover` : 'Blog cover'}
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          loading="lazy"
-        />
-      ) : (
-        <div className="editorial-cover h-full" aria-hidden="true">
-          <FiFeather size={32} />
-        </div>
-      )}
+      <EditorialPhoto src={imageUrl} alt={imageAlt} className="h-full"
+        imageClassName="h-full w-full object-cover transition-transform group-hover:scale-105"
+        fallback={<div className="editorial-cover h-full" aria-hidden="true"><FiFeather size={32} /></div>} />
     </div>
     <div className="space-y-3 p-5">
       <h3 className="text-pretty text-lg font-extrabold tracking-tight text-gray-900">{title}</h3>
@@ -271,11 +267,14 @@ export const PublicDashboard = () => {
               </Link>
             </div>
           </div>
-          <div aria-hidden="true" className="home-art relative grid place-items-center overflow-hidden rounded-2xl border border-white/20">
+          <EditorialPhoto src={heroPhotoUrl} alt={import.meta.env.VITE_HOME_PHOTO_ALT ?? ''} eager
+            className="relative min-h-[clamp(14rem,36vw,29rem)] overflow-hidden rounded-2xl border border-white/20"
+            imageClassName="absolute inset-0 size-full object-cover"
+            fallback={(<div aria-hidden="true" className="home-art relative grid place-items-center overflow-hidden rounded-2xl border border-white/20">
             <div className="grid size-36 place-items-center rounded-full bg-ivory shadow-xl sm:size-44 lg:size-56">
               <img src="/logo.png" alt="" width="500" height="500" className="size-[78%] object-contain" />
             </div>
-          </div>
+          </div>)} />
         </div>
       </section>
 
@@ -319,6 +318,10 @@ export const PublicDashboard = () => {
                 key={e.id}
                 className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
               >
+                <EditorialPhoto src={e.imageUrl} alt={e.imageAlt}
+                  className="mb-4 overflow-hidden rounded-xl"
+                  imageClassName="h-36 w-full object-cover"
+                  fallback={<div className="editorial-cover mb-4 rounded-xl" aria-hidden="true"><FiCalendar size={28} /></div>} />
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="text-pretty text-lg font-extrabold tracking-tight text-gray-900">{e?.title ?? 'Event'}</h3>
                   <Pill>{(e?.category ?? 'event').toString()}</Pill>
@@ -399,6 +402,7 @@ export const PublicDashboard = () => {
               <BlogCard
                 key={post.id}
                 imageUrl={post?.coverImageUrl}
+                imageAlt={post?.coverImageAlt}
                 title={post?.title ?? 'Untitled'}
                 author={post?.authorName}
                 hashtag={post?.tags?.[0] ? '#' + post.tags[0] : undefined}
