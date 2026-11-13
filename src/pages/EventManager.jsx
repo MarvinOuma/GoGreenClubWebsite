@@ -428,6 +428,7 @@ export const EventManager = () => {
               className="w-full form-control sm:col-span-2"
             />
             <select
+              aria-label="Filter events by status"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full form-control"
