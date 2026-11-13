@@ -4,11 +4,17 @@ const { https, runWith } = require('firebase-functions/v1');
 
 const limits = { name: 80, email: 200, organization: 120, message: 2000, website: 200 };
 const hour = 60 * 60 * 1000;
+const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
 
 exports.submitPartnerInquiry = runWith({
-  enforceAppCheck: process.env.PARTNER_ENFORCE_APP_CHECK === 'true',
+  secrets: isEmulator ? [] : ['PARTNER_RATE_KEY'],
   maxInstances: 10,
 }).https.onCall(async (data, context) => {
+  // The SDK verifies App Check tokens before the handler. Read the policy at
+  // invocation so a project-specific Functions environment controls enforcement.
+  if (!isEmulator && process.env.PARTNER_ENFORCE_APP_CHECK !== 'false' && !context.app) {
+    throw new https.HttpsError('unauthenticated', 'Could not verify the app. Refresh the page and try again.');
+  }
   if (!data || Object.keys(data).some(key => !Object.hasOwn(limits, key)) ||
       Object.entries(limits).some(([key, max]) => typeof data[key] !== 'string' || data[key].length > max)) {
     throw new https.HttpsError('invalid-argument', 'Please check the inquiry fields.');
@@ -22,7 +28,6 @@ exports.submitPartnerInquiry = runWith({
     throw new https.HttpsError('invalid-argument', 'Enter your name, a valid email, and a message.');
   }
 
-  const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
   const key = process.env.PARTNER_RATE_KEY || (isEmulator ? 'emulator-only-key' : '');
   const ip = context.rawRequest.ip || context.rawRequest.socket?.remoteAddress ||
     (isEmulator ? 'local-emulator' : '');

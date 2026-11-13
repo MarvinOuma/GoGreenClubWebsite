@@ -142,7 +142,7 @@ export const PublicDashboard = () => {
     { icon: FaRecycle, label: 'Waste collected', value: overview.wasteKg == null ? '—' : `${number(overview.wasteKg)} kg` },
     { icon: FaTree, label: 'Trees planted', value: number(overview.treesPlanted) },
     { icon: FaUsers, label: 'Active members', value: number(overview.activeMembers) },
-    { icon: FaCalendarAlt, label: 'Events hosted', value: number(overview.eventsHosted) },
+    { icon: FaCalendarAlt, label: 'Completed public events', value: number(overview.eventsHosted) },
   ] : [];
 
   useEffect(() => {

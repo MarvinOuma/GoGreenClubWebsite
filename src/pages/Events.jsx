@@ -397,10 +397,10 @@ export const Events = () => {
             <h2 className="text-2xl font-extrabold tracking-tight text-gray-900 mb-6 mt-12">Past Events</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {pastEvents.map(event => (
-                <div key={event.id} className="bg-gray-100 rounded-2xl p-5 opacity-75">
+                <div key={event.id} className="panel p-5">
                   <h3 className="text-lg font-bold text-gray-700 mb-2">{event.title}</h3>
                   <p className="text-gray-600 text-sm mb-3">{event.description}</p>
-                  <p className="text-sm text-gray-500">📅 {formatEventDate(event.date)}</p>
+                  <p className="text-sm text-muted">📅 {formatEventDate(event.date)}</p>
                 </div>
               ))}
             </div>
