@@ -1,24 +1,30 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /blog/{imageId} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.token.admin == true;
+    function admin() {
+      let profile = /databases/(default)/documents/users/$(request.auth.uid);
+      return request.auth != null && request.auth.token.admin == true &&
+        (!firestore.exists(profile) || (
+          firestore.get(profile).data.get('isActive', true) == true &&
+          firestore.get(profile).data.get('adminRevoked', false) == false
+        ));
     }
 
-    match /events/{imageId} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.token.admin == true;
+    function allowedImage() {
+      return request.resource.size > 0 && request.resource.size <= 5 * 1024 * 1024 &&
+        request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     }
 
-    match /partners/{imageId} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.token.admin == true;
+    match /{directory}/{imageId} {
+      allow get: if directory in ['blog', 'events', 'partners'];
+      allow create: if directory in ['blog', 'events', 'partners'] && admin() &&
+        imageId.matches('[a-f0-9-]{36}') && allowedImage();
+      allow delete: if directory in ['blog', 'events', 'partners'] && admin();
     }
-    
+
+    // The profile editor does not upload photos. Keep existing objects private.
     match /profiles/{userId}/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
     }
   }
 }

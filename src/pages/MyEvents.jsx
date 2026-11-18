@@ -1,3 +1,4 @@
+import { eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
@@ -5,31 +6,12 @@ import { useAuth } from '../context/AuthContext';
 import { DashboardLayout } from '../layout/DashboardLayout';
 import { Link } from 'react-router-dom';
 
-const toDateSafe = (value) => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
-
-const formatEventDate = (value) => {
-  const d = toDateSafe(value);
-  if (!d) return value ?? '';
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
-};
 
 export const MyEvents = () => {
   const { currentUser } = useAuth();
   const [registrations, setRegistrations] = useState([]);
   const [events, setEvents] = useState({});
   const [loading, setLoading] = useState(true);
-
-  const memberLinks = [
-    { path: '/member', label: 'Dashboard' },
-    { path: '/member/profile', label: 'My Profile' },
-    { path: '/member/activities', label: 'My Activities' },
-    { path: '/member/events', label: 'My Events' },
-  ];
 
   useEffect(() => {
     fetchMyEvents();
@@ -39,15 +21,16 @@ export const MyEvents = () => {
     try {
       const q = query(collection(db, 'eventRegistrations'), where('userId', '==', currentUser.uid));
       const snapshot = await getDocs(q);
-      const regs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const regs = Array.from(new Map(snapshot.docs.map(doc => [doc.get('eventId'), { id: doc.id, ...doc.data() }])).values())
+        .filter(reg => reg.eventId);
       setRegistrations(regs);
 
       // Fetch event details
       const eventPromises = regs.map(reg => getDoc(doc(db, 'events', reg.eventId)));
-      const eventDocs = await Promise.all(eventPromises);
+      const eventDocs = await Promise.allSettled(eventPromises);
       const eventsMap = {};
-      eventDocs.forEach(eventDoc => {
-        if (eventDoc.exists()) {
+      eventDocs.forEach(({ status, value: eventDoc }) => {
+        if (status === 'fulfilled' && eventDoc.exists()) {
           eventsMap[eventDoc.id] = { id: eventDoc.id, ...eventDoc.data() };
         }
       });
@@ -61,19 +44,19 @@ export const MyEvents = () => {
 
   const upcomingRegs = registrations.filter(reg => {
     const event = events[reg.eventId];
-    return event && new Date(event.date) >= new Date();
+    return event && eventStatus(event) === 'upcoming';
   });
 
   const pastRegs = registrations.filter(reg => {
     const event = events[reg.eventId];
-    return event && new Date(event.date) < new Date();
+    return event && eventStatus(event) === 'completed';
   });
 
   const attendedRegs = pastRegs.filter(reg => reg.attended === true);
   const missedRegs = pastRegs.filter(reg => reg.attended === false);
 
   return (
-    <DashboardLayout links={memberLinks} title="My Events">
+    <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-8">
         {loading ? (
           <div className="space-y-6">

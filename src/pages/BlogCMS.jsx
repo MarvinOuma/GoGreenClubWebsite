@@ -1,7 +1,8 @@
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase/firebaseConfig';
+import { discardUpload, imageAccept, uploadImage } from '../firebase/images';
+import { db } from '../firebase/firebaseConfig';
 import { DashboardLayout } from '../layout/DashboardLayout';
 
 const toJsDate = (value) => {
@@ -70,40 +71,11 @@ const Toast = ({ toast, onClose }) => {
   );
 };
 
-const ConfirmModal = ({ open, title, description, confirmLabel = 'Delete', onCancel, onConfirm }) => {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-xl">
-        <div className="p-6">
-          <h3 className="text-lg font-extrabold text-gray-900">{title}</h3>
-          <p className="mt-2 text-sm text-gray-600">{description}</p>
-        </div>
-        <div className="flex items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 p-4">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const initialForm = {
   title: '',
   content: '',
   authorName: '',
+  coverImageAlt: '',
   tagsText: '',
   isPublished: false,
 };
@@ -119,16 +91,6 @@ export const BlogCMS = () => {
   const [imagePreviewUrl, setImagePreviewUrl] = useState('');
   const [toast, setToast] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-
-  const adminLinks = [
-    { path: '/admin', label: 'Overview' },
-    { path: '/admin/events', label: 'Event Manager' },
-    { path: '/admin/users', label: 'User Management' },
-    { path: '/admin/reports', label: 'Approval Queue' },
-    { path: '/admin/blog', label: 'Blog CMS' },
-    { path: '/admin/partners', label: 'Partners' },
-    { path: '/admin/messages', label: 'Partner Inbox' },
-  ];
 
   useEffect(() => {
     fetchPosts();
@@ -150,25 +112,26 @@ export const BlogCMS = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    let uploaded;
     try {
       setSaving(true);
       setToast(null);
 
       let coverImageUrl;
       if (imageFile) {
-        const imageRef = ref(storage, `blog/${Date.now()}_${imageFile.name}`);
-        await uploadBytes(imageRef, imageFile);
-        coverImageUrl = await getDownloadURL(imageRef);
+        uploaded = await uploadImage('blog', imageFile);
+        coverImageUrl = uploaded.url;
       }
 
       const payload = {
         title: formData.title.trim(),
         content: formData.content,
         authorName: formData.authorName.trim(),
+        coverImageAlt: formData.coverImageAlt.trim(),
         tags: parseTags(formData.tagsText),
         isPublished: !!formData.isPublished,
         updatedAt: new Date(),
-        ...(coverImageUrl ? { coverImageUrl } : {}),
+        ...(uploaded ? { coverImageUrl, coverImagePath: uploaded.path } : {}),
       };
 
       if (editingId) {
@@ -179,6 +142,7 @@ export const BlogCMS = () => {
         setToast({ type: 'success', message: 'Post created successfully.' });
       }
 
+      uploaded = undefined;
       setFormData(initialForm);
       setEditingId('');
       setImageFile(null);
@@ -186,8 +150,9 @@ export const BlogCMS = () => {
       setShowForm(false);
       await fetchPosts();
     } catch (e) {
+      await discardUpload(uploaded);
       console.error('Error saving post:', e);
-      setToast({ type: 'error', message: 'Failed to save post. Please try again.' });
+      setToast({ type: 'error', message: e.message || 'Failed to save post. Please try again.' });
     } finally {
       setSaving(false);
     }
@@ -217,6 +182,7 @@ export const BlogCMS = () => {
       title: post?.title ?? '',
       content: post?.content ?? '',
       authorName: post?.authorName ?? '',
+      coverImageAlt: post?.coverImageAlt ?? '',
       tagsText: (post?.tags ?? []).join(', '),
       isPublished: !!post?.isPublished,
     });
@@ -255,7 +221,7 @@ export const BlogCMS = () => {
   }, [imageFile]);
 
   return (
-    <DashboardLayout links={adminLinks} title="Blog CMS">
+    <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-6">
         <Toast toast={toast} onClose={() => setToast(null)} />
 
@@ -299,47 +265,47 @@ export const BlogCMS = () => {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-900">Title</label>
-                  <input
+                  <label htmlFor="blogcms-title" className="block text-sm font-semibold text-gray-900">Title</label>
+                  <input id="blogcms-title"
                     type="text"
                     placeholder="Post title"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                    className="mt-2 w-full form-control"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900">Author</label>
-                  <input
+                  <label htmlFor="blogcms-author" className="block text-sm font-semibold text-gray-900">Author</label>
+                  <input id="blogcms-author"
                     type="text"
                     placeholder="Author name"
                     value={formData.authorName}
                     onChange={(e) => setFormData({ ...formData, authorName: e.target.value })}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                    className="mt-2 w-full form-control"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900">Tags</label>
-                  <input
+                  <label htmlFor="blogcms-tags" className="block text-sm font-semibold text-gray-900">Tags</label>
+                  <input id="blogcms-tags"
                     type="text"
                     placeholder="e.g. Climate, Recycling, Events"
                     value={formData.tagsText}
                     onChange={(e) => setFormData({ ...formData, tagsText: e.target.value })}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                    className="mt-2 w-full form-control"
                   />
                   <p className="mt-1 text-xs text-gray-500">Comma separated. Example: Trees, Cleanups, Innovation</p>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-900">Content</label>
-                <textarea
+                <label htmlFor="blogcms-content" className="block text-sm font-semibold text-gray-900">Content</label>
+                <textarea id="blogcms-content"
                   placeholder="Write your post..."
                   value={formData.content}
                   onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                  className="mt-2 w-full form-control"
                   rows={10}
                   required
                 />
@@ -347,17 +313,17 @@ export const BlogCMS = () => {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900">Cover image</label>
-                  <input
+                  <label htmlFor="blogcms-cover-image" className="block text-sm font-semibold text-gray-900">Cover image</label>
+                  <input id="blogcms-cover-image"
                     type="file"
-                    accept="image/*"
+                    accept={imageAccept}
                     onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
                     className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm"
                   />
-                  <p className="mt-1 text-xs text-gray-500">Optional. Recommended: landscape image.</p>
+                  <p className="mt-1 text-xs text-gray-500">Use an approved club photo. JPEG, PNG, WebP or GIF up to 5 MB.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-900">Preview</label>
+                  <p className="block text-sm font-semibold text-gray-900">Preview</p>
                   <div className="mt-2 overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
                     {imagePreviewUrl || existingCoverUrl ? (
                       <img
@@ -373,6 +339,12 @@ export const BlogCMS = () => {
                   </div>
                 </div>
               </div>
+
+              {(imageFile || existingCoverUrl) && <label className="block text-sm font-semibold">
+                Image description <span className="font-normal text-muted">(optional)</span>
+                <input className="form-control mt-1" value={formData.coverImageAlt} maxLength={180}
+                  onChange={event => setFormData({ ...formData, coverImageAlt: event.target.value })} />
+              </label>}
 
               <label className="flex items-center space-x-2">
                 <input
@@ -473,7 +445,7 @@ export const BlogCMS = () => {
         </div>
       </div>
 
-      <ConfirmModal
+      <ConfirmDialog
         open={!!deleteTarget}
         title="Delete this post?"
         description={`This will permanently delete “${deleteTarget?.title ?? 'Untitled post'}”. This action cannot be undone.`}

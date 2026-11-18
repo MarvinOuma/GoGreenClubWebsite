@@ -1,47 +1,24 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# GoGreen Club Platform - Deployment Script
-
-echo "🌍 GoGreen Club Platform - Deployment"
-echo "======================================"
-echo ""
-
-# Check if .env exists
-if [ ! -f .env ]; then
-    echo "❌ Error: .env file not found!"
-    echo "Please create .env file from .env.example and add your Firebase config"
-    exit 1
+if [[ $# -ne 1 || -z "$1" || "$1" == -* || "$1" == demo-* ]]; then
+  printf 'Usage: %s <approved-firebase-project-id>\n' "$0" >&2
+  exit 2
 fi
 
-# Check if logo exists
-if [ ! -f public/logo.png ]; then
-    echo "⚠️  Warning: Logo not found at public/logo.png"
-    echo "Please add your logo before deploying"
-    read -p "Continue anyway? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-fi
-
-echo "📦 Installing dependencies..."
-npm install
-
-echo ""
-echo "🔧 Installing Cloud Functions dependencies..."
-cd functions
-npm install
-cd ..
-
-echo ""
-echo "🏗️  Building application..."
+cd "$(dirname "$0")"
+project="$1"
+npm ci
+npm ci --prefix functions
+node --input-type=module - "$project" <<'JS'
+import { loadEnv } from 'vite';
+const env = loadEnv('production', process.cwd(), 'VITE_');
+for (const key of ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_AUTH_DOMAIN', 'VITE_FIREBASE_STORAGE_BUCKET', 'VITE_FIREBASE_APP_ID']) {
+  if (!env[key]?.trim()) throw new Error(`Missing ${key}`);
+}
+if (env.VITE_FIREBASE_PROJECT_ID !== process.argv[2] || env.VITE_FIREBASE_EMULATORS === 'true') {
+  throw new Error('The production build must use the selected Firebase project and live Firebase services.');
+}
+JS
 npm run build
-
-echo ""
-echo "🚀 Deploying to Firebase..."
-firebase deploy
-
-echo ""
-echo "✅ Deployment complete!"
-echo ""
-echo "Your app is now live! 🎉"
+firebase deploy --project "$project"

@@ -21,16 +21,6 @@ export const UserManagement = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [confirmState, setConfirmState] = useState(null); // { title, description, confirmLabel, tone, action: fn }
 
-  const adminLinks = [
-    { path: '/admin', label: 'Overview' },
-    { path: '/admin/events', label: 'Event Manager' },
-    { path: '/admin/users', label: 'User Management' },
-    { path: '/admin/reports', label: 'Approval Queue' },
-    { path: '/admin/blog', label: 'Blog CMS' },
-    { path: '/admin/partners', label: 'Partners' },
-    { path: '/admin/messages', label: 'Partner Inbox' },
-  ];
-
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -38,7 +28,7 @@ export const UserManagement = () => {
   const fetchUsers = async () => {
     try {
       const snapshot = await getDocs(collection(db, 'users'));
-      setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setUsers(snapshot.docs.filter(doc => !doc.get('deletedAt')).map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -47,7 +37,7 @@ export const UserManagement = () => {
   };
 
   const filteredAndSortedUsers = useMemo(() => {
-    let filtered = users;
+    let filtered = [...users];
 
     // Search filter
     if (searchTerm) {
@@ -90,12 +80,12 @@ export const UserManagement = () => {
       const updateUserRole = httpsCallable(functions, 'updateUserRole');
       await updateUserRole({ userId, role: newRole });
       
-      toast.success('Role updated', `Set to ${newRole}. User must logout/login to see changes.`);
+      toast.success('Role updated', `Set to ${newRole}. The user can refresh access or sign in again.`);
       fetchUsers();
       setDrawerOpen(false);
     } catch (error) {
       console.error('Error updating role:', error);
-      toast.error('Update failed', 'Failed to update role. Please try again.');
+      toast.error('Update failed', error.message);
     }
   };
 
@@ -110,7 +100,7 @@ export const UserManagement = () => {
       setDrawerOpen(false);
     } catch (error) {
       console.error('Error updating status:', error);
-      toast.error('Update failed', 'Failed to update account status. Please try again.');
+      toast.error('Update failed', error.message);
     }
   };
 
@@ -125,7 +115,7 @@ export const UserManagement = () => {
       setDrawerOpen(false);
     } catch (error) {
       console.error('Error deleting user:', error);
-      toast.error('Delete failed', 'Failed to delete user. Please try again.');
+      toast.error('Delete failed', error.message);
     }
   };
 
@@ -168,7 +158,7 @@ export const UserManagement = () => {
   };
 
   return (
-    <DashboardLayout links={adminLinks} title="User Management">
+    <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm w-full">

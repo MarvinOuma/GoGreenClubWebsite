@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { webUrl } from '../lib/webUrl';
+import { useEffect, useState } from 'react';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { db, storage } from '../firebase/firebaseConfig';
+import { discardUpload, imageAccept, uploadImage } from '../firebase/images';
+import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { DashboardLayout } from '../layout/DashboardLayout';
 import { useToast } from '../components/ui/ToastProvider';
@@ -45,19 +46,6 @@ export const PartnersAdmin = () => {
     isActive: true,
     logoUrl: '',
   });
-
-  const adminLinks = useMemo(
-    () => [
-      { path: '/admin', label: 'Overview' },
-      { path: '/admin/events', label: 'Event Manager' },
-      { path: '/admin/users', label: 'User Management' },
-      { path: '/admin/reports', label: 'Approval Queue' },
-      { path: '/admin/blog', label: 'Blog CMS' },
-      { path: '/admin/partners', label: 'Partners' },
-      { path: '/admin/messages', label: 'Partner Inbox' },
-    ],
-    []
-  );
 
   useEffect(() => {
     fetchPartners();
@@ -120,22 +108,28 @@ export const PartnersAdmin = () => {
       return;
     }
 
+    const website = webUrl(form.websiteUrl);
+    if (form.websiteUrl.trim() && !website) {
+      toast.error('Invalid website', 'Enter a complete HTTP or HTTPS address.');
+      return;
+    }
+
     setSaving(true);
+    let uploaded;
     try {
       let logoUrl = form.logoUrl || '';
       if (logoFile) {
-        const path = `partners/${Date.now()}_${logoFile.name}`;
-        const logoRef = ref(storage, path);
-        await uploadBytes(logoRef, logoFile);
-        logoUrl = await getDownloadURL(logoRef);
+        uploaded = await uploadImage('partners', logoFile);
+        logoUrl = uploaded.url;
       }
 
       const payload = {
         name,
-        websiteUrl: form.websiteUrl.trim(),
+        websiteUrl: website ?? '',
         order: Number(form.order ?? 0) || 0,
         isActive: form.isActive !== false,
         logoUrl,
+        ...(uploaded ? { logoPath: uploaded.path } : {}),
       };
 
       if (editingId) {
@@ -150,9 +144,11 @@ export const PartnersAdmin = () => {
         toast.success('Created', 'Partner added.');
       }
 
+      uploaded = undefined;
       await fetchPartners();
       resetForm();
     } catch (err) {
+      await discardUpload(uploaded);
       console.error('Error saving partner:', err);
       toast.error('Save failed', err?.message ?? 'Please try again.');
     } finally {
@@ -172,7 +168,7 @@ export const PartnersAdmin = () => {
   };
 
   return (
-    <DashboardLayout links={adminLinks} title="Partners">
+    <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -240,7 +236,7 @@ export const PartnersAdmin = () => {
                   <div className="rounded-2xl border border-gray-100 bg-white p-4">
                     <input
                       type="file"
-                      accept="image/*"
+                      accept={imageAccept}
                       onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
                       className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-xl file:border-0 file:bg-emerald-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-emerald-700 hover:file:bg-emerald-100"
                     />
@@ -307,9 +303,9 @@ export const PartnersAdmin = () => {
                         {p?.isActive === false ? 'Draft / Hidden' : 'Active'} · Order {Number(p?.order ?? 0) || 0}
                         {p?.createdAt ? ` · Added ${formatDateTime(p.createdAt)}` : ''}
                       </p>
-                      {p?.websiteUrl ? (
+                      {webUrl(p.websiteUrl) ? (
                         <a
-                          href={p.websiteUrl}
+                          href={webUrl(p.websiteUrl)}
                           target="_blank"
                           rel="noreferrer"
                           className="mt-2 inline-block text-sm font-bold text-emerald-700 hover:underline"

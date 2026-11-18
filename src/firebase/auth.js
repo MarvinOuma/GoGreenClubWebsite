@@ -6,6 +6,7 @@ import {
   signOut
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { callFunction } from './callable';
 import { auth, db } from './firebaseConfig';
 
 export const signUpWithEmail = (email, password) => {
@@ -25,44 +26,22 @@ export const logout = () => {
   return signOut(auth);
 };
 
-export const getAuthProfile = async (user, options = {}) => {
-  const { forceRefresh = false } = options;
-
-  try {
-    const tokenResult = await user.getIdTokenResult(forceRefresh);
-    const claims = tokenResult?.claims ?? {};
-    const claimRole = typeof claims.role === 'string' ? claims.role : null;
-    const hasAdminClaim = claims.admin === true;
-
-    let profileRole = 'member';
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    if (userDoc.exists()) {
-      profileRole = userDoc.data().role || 'member';
-    }
-
-    return {
-      claims,
-      hasAdminClaim,
-      profileRole,
-      role: claimRole || profileRole || 'member',
-    };
-  } catch (error) {
-    console.error('Error getting auth profile:', error);
-    return {
-      claims: {},
-      hasAdminClaim: false,
-      profileRole: 'member',
-      role: 'member',
-    };
+export async function getAuthProfile(user) {
+  const { claims } = await user.getIdTokenResult();
+  let snapshot = await getDoc(doc(db, 'users', user.uid));
+  if (!snapshot.exists()) {
+    await callFunction('initializeMyProfile', {});
+    snapshot = await getDoc(doc(db, 'users', user.uid));
   }
-};
-
-export const getUserRole = async (user, options) => {
-  const profile = await getAuthProfile(user, options);
-  return profile.role;
-};
-
-export const isAdmin = async (user, options) => {
-  const profile = await getAuthProfile(user, options);
-  return profile.hasAdminClaim;
-};
+  if (!snapshot.exists()) throw new Error('Your profile could not be initialized. Please retry.');
+  const profile = snapshot.data();
+  const isActive = profile.isActive !== false && !profile.deleting;
+  const onboardingComplete = typeof profile.name === 'string' && profile.name.trim().length > 0 &&
+    typeof profile.branch === 'string' && profile.branch.trim().length > 0 &&
+    Array.isArray(profile.interests);
+  return {
+    hasAdminClaim: claims.admin === true && isActive && profile.adminRevoked !== true,
+    isActive,
+    onboardingComplete,
+  };
+}

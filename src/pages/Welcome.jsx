@@ -6,8 +6,9 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastProvider';
 
 export const Welcome = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, isAdminUser, refreshAccess } = useAuth();
   const toast = useToast();
+  const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const [branch, setBranch] = useState('');
   const [interests, setInterests] = useState('');
@@ -15,19 +16,24 @@ export const Welcome = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving) return;
+    setSaving(true);
     try {
       await setDoc(doc(db, 'users', currentUser.uid), {
-        name,
-        branch,
+        name: name.trim(),
+        branch: branch.trim(),
         interests: interests
           .split(',')
           .map((i) => i.trim())
           .filter(Boolean),
       }, { merge: true });
-      navigate('/member');
+      await refreshAccess();
+      navigate(isAdminUser ? '/admin' : '/member', { replace: true });
     } catch (err) {
       console.error(err);
       toast.error('Setup failed', err?.message ?? 'Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -44,29 +50,34 @@ export const Welcome = () => {
           <input
             type="text"
             placeholder="Full Name"
+            maxLength={120}
+            aria-label="Full Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+            className="w-full form-control"
             required
           />
           <input
             type="text"
             placeholder="Branch/Department"
+            maxLength={120}
+            aria-label="Branch/Department"
             value={branch}
             onChange={(e) => setBranch(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+            className="w-full form-control"
             required
           />
           <input
             type="text"
             placeholder="Interests (comma separated)"
+            aria-label="Interests (comma separated)"
             value={interests}
             onChange={(e) => setInterests(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+            className="w-full form-control"
             required
           />
-          <button type="submit" className="w-full btn-primary">
-            Get Started
+          <button type="submit" disabled={saving} className="w-full btn-primary">
+            {saving ? 'Saving…' : 'Get Started'}
           </button>
         </form>
       </div>

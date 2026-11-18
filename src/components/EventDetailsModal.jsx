@@ -1,152 +1,125 @@
-import { useMemo, useState } from 'react';
+import { FiX } from 'react-icons/fi';
+import { EditorialPhoto } from './ui/EditorialPhoto';
+import { Dialog } from './ui/Dialog';
+import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
+import { useEffect, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from './ui/ToastProvider';
 
-const toDateSafe = (value) => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
-
-const formatEventDate = (value) => {
-  const d = toDateSafe(value);
-  if (!d) return value ?? '';
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
-};
 
 export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregister, isRegistered, currentUserId }) => {
+  const titleId = useId();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [shareMessage, setShareMessage] = useState('');
   const toast = useToast();
   const navigate = useNavigate();
-  const eventId = event?.id ?? '';
-
-  // Hooks must be called unconditionally. Compute shareUrl even when modal is closed.
-  const shareUrl = useMemo(() => {
-    if (!eventId) return '';
-    try {
-      const base = window.location.origin;
-      return `${base}/events?event=${encodeURIComponent(eventId)}`;
-    } catch {
-      return `/events?event=${encodeURIComponent(eventId)}`;
-    }
+  const eventId = event?.id;
+  useEffect(() => {
+    setError('');
+    setShareMessage('');
   }, [eventId]);
 
   if (!isOpen || !event) return null;
 
   const spotsLeft = (event.maxParticipants || 0) - (event.registeredCount || 0);
-  const isFull = event.maxParticipants && spotsLeft <= 0;
-  const isPast = new Date(event.date) < new Date();
-  const isDeadlinePassed = event.registrationDeadline && new Date(event.registrationDeadline) < new Date();
+  const isFull = event.registrationCountVersion >= 1 && event.maxParticipants && spotsLeft <= 0;
+  const isPast = eventStatus(event) !== 'upcoming';
+  const isDeadlinePassed = event.registrationDeadline && (eventDate(event.registrationDeadline)?.getTime() ?? 0) < Date.now();
   const canRegisterBase = !isRegistered && !isFull && !isPast && !isDeadlinePassed;
   const needsAuth = !currentUserId;
   const canClickRegister = canRegisterBase && !loading;
 
-  const handleRegister = async () => {
+  const updateRegistration = async action => {
     setLoading(true);
-    await onRegister(event.id);
-    setLoading(false);
-  };
-
-  const handleUnregister = async () => {
-    setLoading(true);
-    await onUnregister(event.id);
-    setLoading(false);
-  };
-
-  const copyShareLink = async () => {
+    setError('');
     try {
-      if (!shareUrl) {
-        toast.error('Copy failed', 'Unable to create a share link for this event.');
-        return;
+      const message = await action(event.id);
+      if (message) setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyShareLink = async ({ currentTarget: button }) => {
+    const url = new URL('/events', window.location.origin);
+    url.searchParams.set('event', event.id);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url.href);
+      } else {
+        const input = document.createElement('textarea');
+        input.value = url.href;
+        input.readOnly = true;
+        input.className = 'sr-only';
+        button.parentElement.append(input);
+        try {
+          input.select();
+          if (!document.execCommand('copy')) throw new Error('Clipboard unavailable');
+        } finally {
+          input.remove();
+          button.focus();
+        }
       }
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareUrl);
-        toast.success('Link copied', 'Share it with your friends.');
-        return;
-      }
-      // Fallback
-      const ta = document.createElement('textarea');
-      ta.value = shareUrl;
-      ta.setAttribute('readonly', 'true');
-      ta.style.position = 'fixed';
-      ta.style.top = '-9999px';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      toast.success('Link copied', 'Share it with your friends.');
-    } catch (e) {
-      console.error('Copy link failed:', e);
-      toast.error('Copy failed', 'Please copy the URL from the address bar.');
+      setShareMessage('Link copied.');
+    } catch {
+      setShareMessage('Copy the link from the address bar.');
     }
   };
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          {event.imageUrl && (
-            <img src={event.imageUrl} alt={event.title} className="w-full h-48 md:h-64 object-cover rounded-t-2xl" />
-          )}
-          <div className="p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h2 className="text-2xl font-bold text-brand-green mb-1">{event.title}</h2>
-                <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
-                  {event.category?.toUpperCase() || 'EVENT'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={copyShareLink}
-                  className="px-3 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition"
-                  aria-label="Copy event link"
-                >
-                  Copy Link
-                </button>
-                <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" aria-label="Close">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
+    <Dialog open={isOpen} onClose={onClose} titleId={titleId} className="event-dialog">
+      <div className="flex max-h-[inherit] flex-col">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-line bg-white p-4 sm:p-5">
+          <div className="min-w-0">
+            <h2 id={titleId} tabIndex={-1} data-initial-focus className="break-words font-display text-xl font-semibold text-forest sm:text-2xl">
+              {event.title}
+            </h2>
+            <p className="mt-1 text-sm capitalize text-muted">{event.category?.replaceAll('-', ' ') || 'Event'}</p>
+          </div>
+          <button type="button" onClick={onClose} className="btn-secondary shrink-0 px-3 py-2" aria-label="Close event details">
+            <FiX size={19} aria-hidden="true" />
+          </button>
+        </header>
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5" data-event-scroll>
+          <EditorialPhoto src={event.imageUrl} alt={event.imageAlt}
+            className="mb-4 overflow-hidden rounded-xl" imageClassName="h-36 w-full object-cover sm:h-56" eager />
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <button type="button" className="btn-secondary text-sm" onClick={copyShareLink}>Copy link</button>
+          </div>
+            <p role="status" className="text-sm font-semibold text-leaf empty:hidden">{shareMessage}</p>
             <div className="space-y-4">
               <div>
-                <label className="text-sm text-gray-500">Description</label>
-                <p className="text-gray-700">{event.description}</p>
+                <p className="text-sm text-muted">Description</p>
+                <p className="whitespace-pre-wrap break-words text-ink">{event.description}</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 min-[380px]:grid-cols-2">
                 <div>
-                  <label className="text-sm text-gray-500">Date</label>
+                  <p className="text-sm text-muted">Date</p>
                   <p className="font-semibold">📅 {formatEventDate(event.date)}</p>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Location</label>
-                  <p className="font-semibold">📍 {event.location}</p>
+                  <p className="text-sm text-muted">Location</p>
+                  <p className="break-words font-semibold">📍 {event.location}</p>
                 </div>
                 {event.registrationDeadline && (
-                  <div className="col-span-2">
-                    <label className="text-sm text-gray-500">Registration Deadline</label>
-                    <p className={`font-semibold ${isDeadlinePassed ? 'text-red-500' : ''}`}>
+                  <div className="min-[380px]:col-span-2">
+                    <p className="text-sm text-muted">Registration Deadline</p>
+                    <p className={`font-semibold ${isDeadlinePassed ? 'text-danger' : ''}`}>
                       ⏰ {formatEventDate(event.registrationDeadline)} {isDeadlinePassed && '(Passed)'}
                     </p>
                   </div>
                 )}
               </div>
 
-              {event.maxParticipants && (
+              {event.maxParticipants && event.registrationCountVersion >= 1 ? (
                 <div>
-                  <label className="text-sm text-gray-500">Availability</label>
+                  <p className="text-sm text-muted">Availability</p>
                   <div className="mt-2">
                     <div className="flex justify-between text-sm mb-1">
                       <span>{event.registeredCount || 0} / {event.maxParticipants} registered</span>
-                      <span className={spotsLeft <= 5 ? 'text-red-500 font-semibold' : 'text-gray-600'}>
+                      <span className={spotsLeft <= 5 ? 'text-danger font-semibold' : 'text-gray-600'}>
                         {spotsLeft > 0 ? `${spotsLeft} spots left` : 'Full'}
                       </span>
                     </div>
@@ -158,7 +131,7 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
                     </div>
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {event.pointsReward && (
                 <div className="bg-green-50 p-4 rounded-xl">
@@ -173,9 +146,10 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
                 </div>
               )}
 
+              {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-danger">{error}</p>}
               {!isPast && isDeadlinePassed && !isRegistered && (
                 <div className="bg-yellow-50 p-4 rounded-xl text-center">
-                  <p className="text-yellow-700 font-semibold">Registration deadline has passed</p>
+                  <p className="text-warning font-semibold">Registration deadline has passed</p>
                 </div>
               )}
 
@@ -187,9 +161,9 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
                         <p className="text-green-700 font-semibold">✓ You're registered for this event!</p>
                       </div>
                       <button 
-                        onClick={handleUnregister} 
+                        onClick={() => updateRegistration(onUnregister)}
                         disabled={loading}
-                        className="w-full px-4 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 disabled:opacity-50"
+                        className="w-full btn-danger"
                       >
                         {loading ? 'Processing...' : 'Unregister'}
                       </button>
@@ -214,7 +188,7 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
                             navigate('/login');
                             return;
                           }
-                          handleRegister();
+                          updateRegistration(onRegister);
                         }}
                         disabled={!canClickRegister}
                         className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
@@ -235,8 +209,7 @@ export const EventDetailsModal = ({ event, isOpen, onClose, onRegister, onUnregi
               )}
             </div>
           </div>
-        </div>
       </div>
-    </>
+    </Dialog>
   );
 };

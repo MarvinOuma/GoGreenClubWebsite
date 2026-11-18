@@ -10,27 +10,27 @@ export const MemberProfile = () => {
   const toast = useToast();
   const [formData, setFormData] = useState({ name: '', branch: '', interests: '' });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const memberLinks = [
-    { path: '/member', label: 'Dashboard' },
-    { path: '/member/profile', label: 'My Profile' },
-    { path: '/member/activities', label: 'My Activities' },
-  ];
+  const fetchProfile = async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const data = (await getDoc(doc(db, 'users', currentUser.uid))).data();
+      setFormData({
+        name: typeof data?.name === 'string' ? data.name : '',
+        branch: typeof data?.branch === 'string' ? data.branch : '',
+        interests: Array.isArray(data?.interests) ? data.interests.filter(value => typeof value === 'string').join(', ') : '',
+      });
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      const docSnap = await getDoc(doc(db, 'users', currentUser.uid));
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setFormData({
-          name: data.name || '',
-          branch: data.branch || '',
-          interests: data.interests?.join(', ') || ''
-        });
-      }
-      setLoading(false);
-    };
     fetchProfile();
   }, [currentUser]);
 
@@ -40,8 +40,8 @@ export const MemberProfile = () => {
     try {
       // Use setDoc with merge instead of updateDoc to create document if it doesn't exist
       await setDoc(doc(db, 'users', currentUser.uid), {
-        name: formData.name,
-        branch: formData.branch,
+        name: formData.name.trim(),
+        branch: formData.branch.trim(),
         interests: formData.interests
           .split(',')
           .map((i) => i.trim())
@@ -59,38 +59,43 @@ export const MemberProfile = () => {
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   return (
-    <DashboardLayout links={memberLinks} title="My Profile">
+    <DashboardLayout>
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl md:text-3xl font-bold text-brand-green mb-6">Edit Profile</h1>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        {loadError ? (
+          <div className="panel p-5">
+            <p role="alert" className="mb-3 text-danger">Your profile couldn’t be loaded.</p>
+            <button type="button" className="btn-secondary" onClick={fetchProfile}>Try again</button>
+          </div>
+        ) : <div className="panel p-5">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold mb-2">Full Name</label>
-              <input
+              <label htmlFor="memberprofile-full-name" className="block text-sm font-semibold mb-2">Full Name</label>
+              <input id="memberprofile-full-name"
                 type="text"
-                value={formData.name}
+                value={formData.name} maxLength={120}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-2">Branch/Department</label>
-              <input
+              <label htmlFor="memberprofile-branch-department" className="block text-sm font-semibold mb-2">Branch/Department</label>
+              <input id="memberprofile-branch-department"
                 type="text"
-                value={formData.branch}
+                value={formData.branch} maxLength={120}
                 onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-2">Interests (comma separated)</label>
-              <input
+              <label htmlFor="memberprofile-interests-comma-separated" className="block text-sm font-semibold mb-2">Interests (comma separated)</label>
+              <input id="memberprofile-interests-comma-separated"
                 type="text"
                 value={formData.interests}
                 onChange={(e) => setFormData({ ...formData, interests: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
                 required
               />
             </div>
@@ -98,7 +103,7 @@ export const MemberProfile = () => {
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </form>
-        </div>
+        </div>}
       </div>
     </DashboardLayout>
   );

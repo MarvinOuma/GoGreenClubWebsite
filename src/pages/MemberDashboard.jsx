@@ -1,28 +1,21 @@
+import { FiCalendar, FiCheck, FiMapPin } from 'react-icons/fi';
+import { nextPublicEvents } from '../firebase/eventQueries';
+import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
 import { useState, useEffect } from 'react';
-import { collection, doc, documentId, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '../layout/DashboardLayout';
 import { StatCard } from '../components/ui/StatCard';
 
-const toDateSafe = (value) => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, d] = value.split('-').map((n) => parseInt(n, 10));
-    // Treat date-only values as "end of day" in local time so today's events are still upcoming.
-    return new Date(y, m - 1, d, 23, 59, 59, 999);
-  }
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
 
-const formatEventDate = (value) => {
-  const d = toDateSafe(value);
-  if (!d) return value ?? '';
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
-};
+const badges = [
+  { title: 'First Step', points: 50 },
+  { title: 'Eco Warrior', points: 250 },
+  { title: 'Tree Planter', points: 500 },
+  { title: 'Champion', points: 1000 },
+];
 
 export const MemberDashboard = () => {
   const { currentUser } = useAuth();
@@ -32,12 +25,17 @@ export const MemberDashboard = () => {
   const [discoverEvents, setDiscoverEvents] = useState([]);
   const [eventsJoined, setEventsJoined] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
+    let current = true;
     const fetchData = async () => {
+      setLoading(true);
+      setLoadError(false);
       try {
         const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        setUserData(userDoc.data());
+
 
         // Fetch user's event registrations
         const regsQuery = query(
@@ -46,77 +44,43 @@ export const MemberDashboard = () => {
         );
         const regsSnapshot = await getDocs(regsQuery);
         const registrations = regsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        setEventsJoined(registrations.length);
+        const eventIds = Array.from(new Set(registrations.map(record => record.eventId).filter(Boolean)));
 
-        const now = new Date();
-
-        // Fetch upcoming registered events (only events the user registered for).
-        const eventIds = Array.from(new Set(registrations.map((r) => r.eventId).filter(Boolean)));
-        if (eventIds.length === 0) {
-          setUpcomingEvents([]);
-        } else {
-          // Load only the events the user registered for (chunked due to Firestore "in" limit).
-          const chunks = [];
-          for (let i = 0; i < eventIds.length; i += 10) chunks.push(eventIds.slice(i, i + 10));
-
-          const results = await Promise.all(
-            chunks.map((ids) => getDocs(query(collection(db, 'events'), where(documentId(), 'in', ids))))
-          );
-
-          const eventsById = new Map();
-          for (const snap of results) {
-            snap.docs.forEach((d) => eventsById.set(d.id, { id: d.id, ...d.data() }));
-          }
-
-          const upcoming = Array.from(eventsById.values())
-            .filter((e) => {
-              const d = toDateSafe(e?.date);
-              return d && d >= now;
-            })
-            .sort((a, b) => (toDateSafe(a?.date)?.getTime?.() ?? 0) - (toDateSafe(b?.date)?.getTime?.() ?? 0))
-            .slice(0, 4);
-
-          setUpcomingEvents(upcoming);
-        }
-
-        // Discover upcoming public events (shown even if user isn't registered).
-        try {
-          const pubSnap = await getDocs(query(collection(db, 'events'), where('isPublic', '==', true)));
-          const pubs = pubSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          const next = pubs
-            .filter((e) => {
-              const d = toDateSafe(e?.date);
-              return d && d >= now && e?.status !== 'cancelled';
-            })
-            .sort((a, b) => (toDateSafe(a?.date)?.getTime?.() ?? 0) - (toDateSafe(b?.date)?.getTime?.() ?? 0))
-            .slice(0, 3);
-          setDiscoverEvents(next);
-        } catch (e) {
-          console.warn('Failed to load discover events:', e);
-          setDiscoverEvents([]);
-        }
+        const [joined, discover] = await Promise.all([
+          Promise.allSettled(eventIds.map(id => getDoc(doc(db, 'events', id)))),
+          nextPublicEvents(3).catch(() => []),
+        ]);
+        if (!current) return;
+        setUserData(userDoc.data());
+        setEventsJoined(eventIds.length);
+        setUpcomingEvents(joined
+          .filter(result => result.status === 'fulfilled' && result.value.exists())
+          .map(({ value }) => ({ id: value.id, ...value.data() }))
+          .filter(event => eventStatus(event) === 'upcoming')
+          .sort((a, b) => eventDate(a.date) - eventDate(b.date))
+          .slice(0, 4));
+        setDiscoverEvents(discover);
       } catch (error) {
         console.error('Error fetching data:', error);
+        if (current) setLoadError(true);
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     };
     fetchData();
-  }, [currentUser]);
+    return () => { current = false; };
+  }, [currentUser, retry]);
 
-  const memberLinks = [
-    { path: '/member', label: 'Dashboard' },
-    { path: '/member/profile', label: 'My Profile' },
-    { path: '/member/activities', label: 'My Activities' },
-    { path: '/member/events', label: 'My Events' },
-  ];
-
-  const greenPoints = userData?.greenPoints || 0;
-  const pointsIntoTier = greenPoints % 500;
-  const nextBadgeProgressPct = Math.min(Math.round((pointsIntoTier / 500) * 100), 100);
+  const greenPoints = Number.isFinite(userData?.greenPoints) ? userData.greenPoints : 0;
+  const nextBadge = badges.find(badge => badge.points > greenPoints);
+  const earnedBadge = badges.findLast(badge => badge.points <= greenPoints);
+  const previousThreshold = earnedBadge?.points ?? 0;
+  const pointsToNext = nextBadge ? nextBadge.points - greenPoints : 0;
+  const progress = nextBadge ? Math.max(0, greenPoints - previousThreshold) : 100;
+  const milestoneRange = nextBadge ? nextBadge.points - previousThreshold : 100;
 
   return (
-    <DashboardLayout links={memberLinks} title="Impact Hub">
+    <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
         {loading ? (
           <div className="space-y-6">
@@ -137,18 +101,24 @@ export const MemberDashboard = () => {
               ))}
             </div>
           </div>
+        ) : loadError ? (
+          <div className="panel p-5">
+            <h1 className="text-2xl font-semibold text-forest">Impact Hub</h1>
+            <p role="alert" className="my-3 text-danger">Your dashboard couldn’t be loaded.</p>
+            <button type="button" onClick={() => setRetry(value => value + 1)} className="btn-secondary">Try again</button>
+          </div>
         ) : (
           <>
-        <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-          <p className="text-xs font-semibold text-gray-500">Welcome</p>
-          <h1 className="mt-1 text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">
+        <div className="dashboard-hero">
+          <p className="text-sm font-semibold">Impact Hub</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
             {userData?.name ? `${userData.name}` : 'Member Dashboard'}
           </h1>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm">
             Track your points, upcoming events, and milestones.
           </p>
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <button onClick={() => navigate('/member/activities')} className="btn-primary">
+            <button onClick={() => navigate('/member/activities')} className="btn-primary bg-lime-accent text-ink hover:bg-white">
               Log Activity
             </button>
             <button onClick={() => navigate('/events')} className="btn-secondary">
@@ -157,25 +127,39 @@ export const MemberDashboard = () => {
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCard label="Green Points" value={greenPoints} icon="🌟" />
-          <StatCard label="Events Joined" value={eventsJoined} icon="📅" />
-          <StatCard 
-            label="Impact Level" 
-            value={greenPoints >= 1000 ? 'Champion' : greenPoints >= 500 ? 'Tree Planter' : greenPoints >= 250 ? 'Eco Warrior' : 'Beginner'} 
-            icon="🏆" 
-          />
-        </div>
+        <section aria-labelledby="member-impact" className="panel grid gap-5 p-4 sm:p-6 lg:grid-cols-[1fr_1.1fr]">
+          <div>
+            <h2 id="member-impact" className="text-xl font-semibold text-forest">Your impact</h2>
+            <dl className="mt-4 grid grid-cols-2 gap-4">
+              <div>
+                <dt className="text-sm font-semibold text-muted">Green Points</dt>
+                <dd className="mt-1 font-display text-4xl font-semibold tabular-nums text-forest">{greenPoints.toLocaleString('en-KE')}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-semibold text-muted">Impact level</dt>
+                <dd className="mt-2 break-words font-display text-xl font-semibold">{earnedBadge?.title ?? 'Beginner'}</dd>
+              </div>
+            </dl>
+          </div>
+          <div className="rounded-xl bg-ivory p-4">
+            <h3 className="font-semibold">{nextBadge ? `Next milestone · ${nextBadge.title}` : 'All milestones reached'}</h3>
+            <p className="mt-1 text-sm text-muted">
+              {nextBadge ? `${pointsToNext.toLocaleString('en-KE')} points to go · ${nextBadge.points.toLocaleString('en-KE')} points total`
+                : 'Your Green Points continue to track your contributions.'}
+            </p>
+            <progress className="milestone-progress mt-3 h-2 w-full" value={progress} max={milestoneRange} aria-label="Progress toward the next milestone" />
+            {greenPoints === 0 && <p className="mt-2 text-sm text-muted">Earn points through approved activities or verified event attendance.</p>}
+          </div>
+        </section>
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Upcoming Events */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <h2 className="text-xl font-extrabold tracking-tight text-gray-900">Your Upcoming Events</h2>
+          <div className="panel p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-xl font-semibold text-forest">Your upcoming events</h2>
               <button onClick={() => navigate('/member/events')} className="text-sm font-bold text-emerald-700 hover:underline">
-                View all →
+                My events →
               </button>
             </div>
             {upcomingEvents.length > 0 ? (
@@ -183,15 +167,15 @@ export const MemberDashboard = () => {
                 {upcomingEvents.map(event => (
                   <div key={event.id} className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
                     <h3 className="font-extrabold tracking-tight text-gray-900">{event.title}</h3>
-                    <p className="mt-1 text-sm text-gray-600">📅 {formatEventDate(event.date)}</p>
-                    <p className="text-sm text-gray-600">📍 {event.location}</p>
+                    <p className="mt-1 text-sm text-gray-600"><FiCalendar className="mr-1 inline" aria-hidden="true" /> {formatEventDate(event.date)}</p>
+                    <p className="text-sm text-gray-600"><FiMapPin className="mr-1 inline" aria-hidden="true" /> {event.location}</p>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="rounded-2xl border border-gray-100 bg-gray-50 p-6 text-center">
-                <p className="text-sm font-semibold text-gray-700">No upcoming events</p>
-                <p className="mt-1 text-sm text-gray-600">Register for an event to see it here.</p>
+                <p className="text-sm font-semibold text-gray-700">You have no upcoming registrations</p>
+                <p className="mt-1 text-sm text-gray-600">Your next registered event will appear here.</p>
                 <div className="mt-4">
                   <button onClick={() => navigate('/events')} className="btn-secondary">
                     Explore Events
@@ -211,7 +195,7 @@ export const MemberDashboard = () => {
                       className="w-full text-left rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm hover:shadow-md transition"
                     >
                       <p className="text-sm font-extrabold tracking-tight text-gray-900">{e.title}</p>
-                      <p className="mt-1 text-xs text-gray-600">📅 {formatEventDate(e.date)} · 📍 {e.location}</p>
+                      <p className="mt-1 text-xs text-gray-600">{formatEventDate(e.date)} · {e.location}</p>
                     </button>
                   ))}
                 </div>
@@ -219,52 +203,21 @@ export const MemberDashboard = () => {
             ) : null}
           </div>
 
-          {/* Impact Tracker */}
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
-            <h2 className="text-xl font-extrabold tracking-tight text-gray-900 mb-4">Impact Tracker</h2>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm font-semibold">Progress to Next Badge</span>
-                  <span className="text-sm text-emerald-700 font-bold">{nextBadgeProgressPct}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div className="bg-emerald-600 h-3 rounded-full transition-all" style={{ width: `${nextBadgeProgressPct}%` }}></div>
-                </div>
-              </div>
-              
-              <button onClick={() => navigate('/member/activities')} className="w-full btn-primary min-h-[44px]">
-                Log Activity
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Badges */}
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5">
-          <h2 className="text-xl font-extrabold tracking-tight text-gray-900 mb-4">Badges & Milestones</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className={`text-center p-4 rounded-xl ${greenPoints >= 50 ? 'bg-green-50' : 'bg-gray-100 opacity-50'}`}>
-              <div className="text-4xl mb-2">🌱</div>
-              <p className="text-sm font-semibold">First Step</p>
-              <p className="text-xs text-gray-600">50 points</p>
-            </div>
-            <div className={`text-center p-4 rounded-xl ${greenPoints >= 250 ? 'bg-green-50' : 'bg-gray-100 opacity-50'}`}>
-              <div className="text-4xl mb-2">🌿</div>
-              <p className="text-sm font-semibold">Eco Warrior</p>
-              <p className="text-xs text-gray-600">250 points</p>
-            </div>
-            <div className={`text-center p-4 rounded-xl ${greenPoints >= 500 ? 'bg-green-50' : 'bg-gray-100 opacity-50'}`}>
-              <div className="text-4xl mb-2">🌳</div>
-              <p className="text-sm font-semibold">Tree Planter</p>
-              <p className="text-xs text-gray-600">500 points</p>
-            </div>
-            <div className={`text-center p-4 rounded-xl ${greenPoints >= 1000 ? 'bg-green-50' : 'bg-gray-100 opacity-50'}`}>
-              <div className="text-4xl mb-2">🏆</div>
-              <p className="text-sm font-semibold">Champion</p>
-              <p className="text-xs text-gray-600">1000 points</p>
-            </div>
-          </div>
+          <section aria-labelledby="member-milestones" className="panel p-5">
+            <StatCard label="Events joined" value={eventsJoined} icon={FiCalendar} />
+            <h2 id="member-milestones" className="mb-2 mt-5 text-xl font-semibold text-forest">Milestones</h2>
+            <ol className="divide-y divide-line">
+              {badges.map(({ title, points }) => (
+                <li key={title} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+                  <span className="font-semibold">{title}</span>
+                  <span className="inline-flex items-center gap-1 text-muted">
+                    {greenPoints >= points ? <><FiCheck aria-hidden="true" className="text-leaf" /> Earned</>
+                      : `${points.toLocaleString('en-KE')} points`}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </section>
         </div>
           </>
         )}

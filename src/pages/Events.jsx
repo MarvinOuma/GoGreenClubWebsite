@@ -1,23 +1,15 @@
+import { EditorialPhoto } from '../components/ui/EditorialPhoto';
+import { FiCalendar, FiMapPin } from 'react-icons/fi';
+import { eventDate, eventStatus, formatEventDate } from '../../functions/lib/eventTime.mjs';
+import { callFunction } from '../firebase/callable';
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { collection, getDocs, query, where, doc, runTransaction } from 'firebase/firestore';
+import { Link, useSearchParams } from 'react-router-dom';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { EventDetailsModal } from '../components/EventDetailsModal';
 import { useToast } from '../components/ui/ToastProvider';
 
-const toDateSafe = (value) => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
-
-const formatEventDate = (value) => {
-  const d = toDateSafe(value);
-  if (!d) return value ?? '';
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
-};
 
 const EventCardSkeleton = () => (
   <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -42,8 +34,6 @@ export const Events = () => {
   const [myRegistrations, setMyRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -52,9 +42,8 @@ export const Events = () => {
 
   useEffect(() => {
     fetchEvents();
-    if (currentUser) {
-      fetchMyRegistrations();
-    }
+    if (currentUser) fetchMyRegistrations();
+    else { setMyRegistrations([]); setRegisteredOnly(false); }
   }, [currentUser]);
 
   // Debounce search input
@@ -74,7 +63,7 @@ export const Events = () => {
       // IMPORTANT: Use a constrained query so this won't fail if private events exist.
       const snapshot = await getDocs(query(collection(db, 'events'), where('isPublic', '==', true)));
       const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      eventsData.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+      eventsData.sort((a, b) => eventDate(a.date) - eventDate(b.date));
       setEvents(eventsData.filter(e => e.isPublic !== false && e.status !== 'cancelled'));
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -101,136 +90,41 @@ export const Events = () => {
     return myRegistrations.some(reg => reg.eventId === eventId);
   };
 
-  const handleRegister = async (eventId) => {
+  const changeRegistration = async (eventId, register) => {
     if (!currentUser?.uid) {
-      toast.info('Login required', 'Please log in to register for events.');
+      toast.info('Login required', 'Please log in to manage event registrations.');
       return;
     }
     try {
-      const registrationId = `${currentUser.uid}_${eventId}`;
-      await runTransaction(db, async (transaction) => {
-        const eventRef = doc(db, 'events', eventId);
-        const regRef = doc(db, 'eventRegistrations', registrationId);
-
-        const [eventDoc, regDoc] = await Promise.all([transaction.get(eventRef), transaction.get(regRef)]);
-        if (!eventDoc.exists()) throw new Error('Event not found.');
-        if (regDoc.exists()) throw new Error('Already registered.');
-
-        const ev = eventDoc.data();
-        const now = new Date();
-        const eventDate = ev?.date ? new Date(ev.date) : null;
-        const deadline = ev?.registrationDeadline ? new Date(ev.registrationDeadline) : null;
-
-        if (deadline && deadline < now) throw new Error('Registration deadline has passed.');
-        if (eventDate && eventDate < now) throw new Error('This event has already ended.');
-
-        const max = ev?.maxParticipants ? Number(ev.maxParticipants) : 0;
-        const current = Number(ev?.registeredCount ?? 0) || 0;
-        if (max && current >= max) throw new Error('Event is full.');
-
-        transaction.set(regRef, {
-          userId: currentUser.uid,
-          eventId,
-          registeredAt: new Date(),
-          status: 'registered',
-        });
-        transaction.update(eventRef, { registeredCount: current + 1 });
-      });
-
-      toast.success('Registered', 'Successfully registered for the event.');
-      fetchEvents();
-      fetchMyRegistrations();
-      setModalOpen(false);
+      await callFunction(register ? 'registerForEvent' : 'cancelEventRegistration', { eventId });
+      toast.success(register ? 'Registered' : 'Registration cancelled');
+      closeEventDetails();
+      await Promise.all([fetchEvents(), fetchMyRegistrations()]);
     } catch (error) {
-      console.error('Error registering:', error);
-      toast.error(
-        'Registration failed',
-        error?.code === 'permission-denied'
-          ? 'Please ensure your account is active.'
-          : error?.message === 'Already registered.'
-            ? 'You are already registered for this event.'
-            : error?.message === 'Registration deadline has passed.'
-              ? 'The registration deadline has passed.'
-              : error?.message === 'Event is full.'
-                ? 'No spots left for this event.'
-                : error?.message === 'This event has already ended.'
-                  ? 'This event has ended.'
-                  : error?.message ?? 'Please try again.'
-      );
+      return error.message ?? 'Please try again.';
     }
   };
 
-  const handleUnregister = async (eventId) => {
-    if (!currentUser?.uid) return;
-    try {
-      const registrationId = `${currentUser.uid}_${eventId}`;
-      await runTransaction(db, async (transaction) => {
-        const eventRef = doc(db, 'events', eventId);
-        const regRef = doc(db, 'eventRegistrations', registrationId);
+  const handleRegister = eventId => changeRegistration(eventId, true);
+  const handleUnregister = eventId => changeRegistration(eventId, false);
 
-        const [eventDoc, regDoc] = await Promise.all([transaction.get(eventRef), transaction.get(regRef)]);
-        if (regDoc.exists()) {
-          transaction.delete(regRef);
-        }
-        if (eventDoc.exists()) {
-          const current = Number(eventDoc.data()?.registeredCount ?? 0) || 0;
-          transaction.update(eventRef, { registeredCount: Math.max(0, current - 1) });
-        }
-      });
-
-      toast.success('Unregistered', 'Successfully unregistered from the event.');
-      fetchEvents();
-      fetchMyRegistrations();
-      setModalOpen(false);
-    } catch (error) {
-      console.error('Error unregistering:', error);
-      toast.error('Unregister failed', 'Please try again.');
-    }
-  };
-
-  const openEventDetails = (event) => {
-    setSelectedEvent(event);
-    setModalOpen(true);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('event', event.id);
+  const selectedEventId = searchParams.get('event');
+  const selectedEvent = events.find(event => event.id === selectedEventId);
+  const changeEventDetails = (eventId, replace = false) => {
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      if (eventId) next.set('event', eventId);
+      else next.delete('event');
       return next;
-    });
+    }, { replace });
   };
+  const openEventDetails = event => changeEventDetails(event.id);
+  const closeEventDetails = () => changeEventDetails(null, true);
 
-  const closeEventDetails = () => {
-    setModalOpen(false);
-    setSelectedEvent(null);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('event');
-      return next;
-    });
-  };
-
-  // If someone opens /events?event=<id>, auto-open that event in the modal.
-  useEffect(() => {
-    const eventId = searchParams.get('event');
-    if (!eventId) return;
-    if (!events.length) return;
-    const found = events.find((e) => e.id === eventId);
-    if (found) {
-      setSelectedEvent(found);
-      setModalOpen(true);
-    } else {
-      toast.error('Event not found', 'This shared event link may be invalid or the event is no longer public.');
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete('event');
-        return next;
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events]);
-
-  const now = new Date();
-  const upcomingEvents = events.filter(e => e?.date && new Date(e.date) >= now);
-  const pastEvents = events.filter(e => e?.date && new Date(e.date) < now);
+  const upcomingEvents = events.filter(event => eventStatus(event) === 'upcoming');
+  const registeredSet = useMemo(() => new Set(myRegistrations.map(record => record.eventId)), [myRegistrations]);
+  const pastEvents = events.filter(event => eventStatus(event) === 'completed' &&
+    (!registeredOnly || registeredSet.has(event.id)));
   
   const filteredEvents = useMemo(() => {
     let filtered = upcomingEvents;
@@ -246,12 +140,9 @@ export const Events = () => {
         e.category?.toLowerCase().includes(search)
       );
     }
-    if (registeredOnly && currentUser?.uid) {
-      const regSet = new Set(myRegistrations.map((r) => r.eventId));
-      filtered = filtered.filter((e) => regSet.has(e.id));
-    }
+    if (registeredOnly) filtered = filtered.filter(event => registeredSet.has(event.id));
     return filtered;
-  }, [upcomingEvents, filter, debouncedSearch, registeredOnly, currentUser?.uid, myRegistrations]);
+  }, [upcomingEvents, filter, debouncedSearch, registeredOnly, registeredSet]);
 
   const visibleEvents = filteredEvents.slice(0, visibleCount);
   const categoryOptions = useMemo(() => {
@@ -260,14 +151,13 @@ export const Events = () => {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [upcomingEvents]);
 
-  const registeredSet = useMemo(() => new Set(myRegistrations.map((r) => r.eventId)), [myRegistrations]);
   const featuredEvent = visibleEvents[0] ?? null;
   const gridEvents = featuredEvent ? visibleEvents.slice(1) : visibleEvents;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12">
-        <div className="max-w-6xl mx-auto px-4">
+      <div className="min-h-screen bg-ivory py-10 sm:py-14">
+        <div className="site-container">
           <div className="rounded-3xl border border-gray-100 bg-white p-8 shadow-sm">
             <div className="h-6 w-40 animate-pulse rounded bg-gray-100" />
             <div className="mt-4 h-4 w-2/3 animate-pulse rounded bg-gray-100" />
@@ -284,29 +174,27 @@ export const Events = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-6xl mx-auto px-4">
-        {/* Hero Section */}
-        <div className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700 p-8 md:p-12 mb-12 text-white shadow-sm">
-          <div className="pointer-events-none absolute inset-0 opacity-15">
-            <div className="absolute left-8 top-8 text-6xl">🌿</div>
-            <div className="absolute right-10 top-16 text-6xl">🌱</div>
-            <div className="absolute bottom-10 left-1/3 text-6xl">♻️</div>
+    <div className="min-h-screen bg-ivory py-10 sm:py-14">
+      <div className="site-container">
+        <header className="mb-8 flex flex-wrap items-end justify-between gap-6 border-b border-line pb-8 sm:mb-10">
+          <div>
+            <h1 className="site-heading">Join our events</h1>
+            <p className="mt-4 max-w-lg text-muted">Find cleanups, workshops, and other ways to take action with the club.</p>
           </div>
-          <h1 className="relative text-4xl md:text-5xl font-extrabold tracking-tight mb-4">Join Our Events</h1>
-          <p className="relative text-lg md:text-xl opacity-95 mb-6">Participate in environmental activities and earn Green Points!</p>
-          <div className="flex flex-wrap gap-4">
-            <div className="bg-white/20 backdrop-blur-sm rounded-xl px-6 py-3">
-              <p className="text-sm opacity-80">Upcoming Events</p>
-              <p className="text-2xl font-bold">{upcomingEvents.length}</p>
-            </div>
-            <div className="bg-white/20 backdrop-blur-sm rounded-xl px-6 py-3">
-              <p className="text-sm opacity-80">Your Registrations</p>
-              <p className="text-2xl font-bold">{myRegistrations.length}</p>
-            </div>
-          </div>
-        </div>
-        
+          {!error && (
+            <dl className="flex gap-6 border-l-2 border-leaf pl-4">
+              <div>
+                <dt className="text-sm text-muted">Upcoming</dt>
+                <dd className="font-display text-2xl font-semibold tabular-nums">{upcomingEvents.length}</dd>
+              </div>
+              {currentUser && <div>
+                <dt className="text-sm text-muted">Registered</dt>
+                <dd className="font-display text-2xl font-semibold tabular-nums">{registeredSet.size}</dd>
+              </div>}
+            </dl>
+          )}
+        </header>
+
         {/* Filters */}
         <div className="mb-8 space-y-4">
           <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
@@ -319,13 +207,15 @@ export const Events = () => {
             </div>
             <input
               type="text"
-              placeholder="Search events by title, description, location, or category..."
+              aria-label="Search events"
+              placeholder="Search events"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-12 pr-12 py-3 border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-4 focus:ring-emerald-100 focus:border-emerald-300"
             />
             {searchQuery && (
               <button
+                aria-label="Clear search"
                 onClick={() => setSearchQuery('')}
                 className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
               >
@@ -335,27 +225,18 @@ export const Events = () => {
               </button>
             )}
           </div>
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-                <div>
-                  <p className="text-xs font-semibold text-gray-500">Show</p>
-                  <p className="text-sm font-bold text-gray-900">{registeredOnly ? 'Registered only' : 'All events'}</p>
-                </div>
-                <button
-                  type="button"
-                  disabled={!currentUser?.uid}
-                  onClick={() => setRegisteredOnly((v) => !v)}
-                  className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
-                    !currentUser?.uid
-                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                      : registeredOnly
-                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                        : 'bg-white text-gray-900 ring-1 ring-gray-200 hover:bg-gray-50'
-                  }`}
-                  title={!currentUser?.uid ? 'Login to use this filter' : undefined}
-                >
-                  Toggle
-                </button>
-              </div>
+              {currentUser ? (
+                <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-line bg-ivory px-3 text-sm font-semibold text-forest">
+                  <input type="checkbox" checked={registeredOnly}
+                    onChange={event => setRegisteredOnly(event.target.checked)}
+                    className="size-5 shrink-0 accent-leaf" />
+                  My registrations only
+                </label>
+              ) : (
+                <p className="flex flex-wrap items-center gap-x-1 rounded-lg bg-ivory px-3 py-2 text-sm text-muted">
+                  <Link to="/login" className="font-semibold text-leaf underline">Sign in</Link> to filter by your registrations.
+                </p>
+              )}
             </div>
           </div>
 
@@ -365,7 +246,7 @@ export const Events = () => {
               key={cat}
               onClick={() => setFilter(cat)}
               className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                filter === cat ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-emerald-50'
+                filter === cat ? 'bg-leaf text-white shadow-sm' : 'bg-white text-gray-700 hover:bg-emerald-50'
               }`}
             >
               {cat === 'all'
@@ -376,6 +257,10 @@ export const Events = () => {
         </div>
         </div>
         
+        {selectedEventId && !selectedEvent && !error && (
+          <p role="status" className="panel mb-6 p-4 text-sm text-muted">This event is unavailable.</p>
+        )}
+
         {error ? (
           <div className="mb-6 rounded-3xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-800">
             {error}
@@ -389,7 +274,7 @@ export const Events = () => {
         {filteredEvents.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg mb-2">
-              {debouncedSearch ? 'No events match your search.' : 'No upcoming events in this category'}
+              {debouncedSearch ? 'No events match your search.' : registeredOnly ? 'No upcoming registrations match these filters.' : 'No upcoming events in this category.'}
             </p>
             {debouncedSearch && (
               <button onClick={() => setSearchQuery('')} className="text-brand-green font-semibold hover:underline">
@@ -401,24 +286,15 @@ export const Events = () => {
           <>
             {featuredEvent ? (
               <div
-                onClick={() => openEventDetails(featuredEvent)}
-                className="group mb-8 overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+                className="group relative mb-8 overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
               >
                 <div className="grid gap-0 md:grid-cols-2">
                   <div className="relative h-56 overflow-hidden bg-gray-100 md:h-full">
-                    {featuredEvent.imageUrl ? (
-                      <img
-                        src={featuredEvent.imageUrl}
-                        alt={featuredEvent.title}
-                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 to-white">
-                        <span className="text-xs font-bold text-emerald-700">Featured Event</span>
-                      </div>
-                    )}
-                    <div className="absolute left-4 top-4 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow-sm">
+                    <EditorialPhoto src={featuredEvent.imageUrl} alt={featuredEvent.imageAlt}
+                      className="h-full overflow-hidden"
+                      imageClassName="h-full w-full object-cover"
+                      fallback={<div className="editorial-cover h-full" aria-hidden="true"><FiCalendar size={38} /></div>} />
+                    <div className="absolute left-4 top-4 rounded-full bg-leaf px-3 py-1 text-xs font-bold text-white shadow-sm">
                       Featured
                     </div>
                   </div>
@@ -445,7 +321,9 @@ export const Events = () => {
                     <div className="mt-6">
                       <button
                         type="button"
-                        className="inline-flex items-center rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-800"
+                        onClick={() => openEventDetails(featuredEvent)}
+                        aria-label={`View details for ${featuredEvent.title}`}
+                        className="card-action inline-flex items-center rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-800"
                       >
                         View Details →
                       </button>
@@ -463,21 +341,12 @@ export const Events = () => {
                 return (
                   <div 
                     key={event.id} 
-                    onClick={() => openEventDetails(event)}
-                    className="group bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer"
+                    className="group relative bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer"
                   >
-                    {event.imageUrl ? (
-                      <div className="relative h-40 overflow-hidden bg-gray-100">
-                        <img
-                          src={event.imageUrl}
-                          alt={event.title}
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                          loading="lazy"
-                        />
-                      </div>
-                    ) : (
-                      <div className="h-40 bg-gradient-to-br from-emerald-50 to-white" />
-                    )}
+                    <EditorialPhoto src={event.imageUrl} alt={event.imageAlt}
+                      className="h-40 overflow-hidden"
+                      imageClassName="h-full w-full object-cover"
+                      fallback={<div className="editorial-cover h-40" aria-hidden="true"><FiCalendar size={32} /></div>} />
                     <div className="p-5">
                       <div className="flex items-start justify-between mb-2 gap-2">
                         <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">
@@ -489,12 +358,12 @@ export const Events = () => {
                           </span>
                         ) : null}
                       </div>
-                      <h3 className="text-xl font-extrabold tracking-tight text-gray-900 mb-2">{event.title}</h3>
+                      <h3 className="text-xl font-extrabold tracking-tight text-gray-900 mb-2"><button type="button" className="card-action text-left" onClick={() => openEventDetails(event)}>{event.title}</button></h3>
                       <p className="text-gray-600 mb-4 text-sm line-clamp-2">{event.description}</p>
                       <div className="space-y-2 text-sm text-gray-600">
-                        <p>📅 {formatEventDate(event.date)}</p>
-                        <p>📍 {event.location}</p>
-                        {event.maxParticipants ? (
+                        <p className="flex items-center gap-2"><FiCalendar aria-hidden="true" />{formatEventDate(event.date)}</p>
+                        <p className="flex items-center gap-2"><FiMapPin aria-hidden="true" />{event.location}</p>
+                        {event.maxParticipants && event.registrationCountVersion >= 1 ? (
                           <p className={spotsLeft <= 5 ? 'text-red-600 font-bold' : ''}>
                             👥 {spotsLeft > 0 ? `${spotsLeft} spots left` : 'Full'}
                           </p>
@@ -528,10 +397,10 @@ export const Events = () => {
             <h2 className="text-2xl font-extrabold tracking-tight text-gray-900 mb-6 mt-12">Past Events</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {pastEvents.map(event => (
-                <div key={event.id} className="bg-gray-100 rounded-2xl p-5 opacity-75">
+                <div key={event.id} className="panel p-5">
                   <h3 className="text-lg font-bold text-gray-700 mb-2">{event.title}</h3>
                   <p className="text-gray-600 text-sm mb-3">{event.description}</p>
-                  <p className="text-sm text-gray-500">📅 {formatEventDate(event.date)}</p>
+                  <p className="text-sm text-muted">📅 {formatEventDate(event.date)}</p>
                 </div>
               ))}
             </div>
@@ -541,7 +410,7 @@ export const Events = () => {
 
       <EventDetailsModal
         event={selectedEvent}
-        isOpen={modalOpen}
+        isOpen={Boolean(selectedEvent)}
         onClose={closeEventDetails}
         onRegister={handleRegister}
         onUnregister={handleUnregister}

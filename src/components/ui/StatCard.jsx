@@ -1,12 +1,12 @@
-export const StatCard = ({ label, value, icon, trend }) => {
+export function StatCard({ label, value, icon: Icon, trend }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-all duration-200">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium text-gray-500">{label}</p>
-        {icon && <span className="text-2xl">{icon}</span>}
+    <div className="panel flex min-w-0 items-start justify-between gap-2 p-4 sm:p-5">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-muted">{label}</p>
+        <p className="mt-2 break-words font-display text-2xl font-semibold tracking-tight text-ink tabular-nums sm:text-3xl">{value}</p>
+        {trend && <p className="mt-2 text-xs text-muted">{trend}</p>}
       </div>
-      <p className="text-3xl font-bold text-brand-green">{value}</p>
-      {trend && <p className="text-xs text-gray-500 mt-2">{trend}</p>}
+      {Icon && <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-ivory text-leaf"><Icon aria-hidden="true" /></span>}
     </div>
   );
-};
+}

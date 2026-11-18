@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { onIdTokenChanged } from 'firebase/auth';
 import { auth } from '../firebase/firebaseConfig';
 import { getAuthProfile } from '../firebase/auth';
 
@@ -7,39 +7,50 @@ const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
-  const [userRole, setUserRole] = useState(null);
-  const [isAdminUser, setIsAdminUser] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [access, setAccess] = useState({ loading: true });
+  const sequence = useRef(0);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
-      if (user) {
-        const profile = await getAuthProfile(user, { forceRefresh: true });
-        setUserRole(profile.role);
-        setIsAdminUser(profile.hasAdminClaim);
-      } else {
-        setUserRole(null);
-        setIsAdminUser(false);
-      }
-      setLoading(false);
-    });
-
-    return unsubscribe;
+  const loadAccess = useCallback(async user => {
+    const version = ++sequence.current;
+    setAccess({ loading: true });
+    setCurrentUser(user);
+    try {
+      const profile = user ? await getAuthProfile(user) : {};
+      if (version === sequence.current) setAccess({ ...profile, loading: false });
+    } catch (error) {
+      if (version === sequence.current) setAccess({ error, loading: false });
+    }
   }, []);
 
-  const value = {
-    currentUser,
-    userRole,
-    isAdminUser,
-    loading
+  useEffect(() => {
+    const unsubscribe = onIdTokenChanged(auth, loadAccess);
+    return () => { ++sequence.current; unsubscribe(); };
+  }, [loadAccess]);
+
+  const refreshAccess = async () => {
+    if (!auth.currentUser) return;
+    setAccess({ loading: true });
+    try {
+      await auth.currentUser.getIdToken(true);
+      await loadAccess(auth.currentUser);
+    } catch (error) {
+      setAccess({ error, loading: false });
+    }
   };
 
   return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
+    <AuthContext.Provider value={{
+      currentUser,
+      isAdminUser: access.hasAdminClaim === true,
+      isActive: access.isActive,
+      onboardingComplete: access.onboardingComplete,
+      accessError: access.error,
+      loading: access.loading,
+      refreshAccess,
+    }}>
+      {access.loading ? <p className="p-6" role="status">Loading…</p> : children}
     </AuthContext.Provider>
   );
-};
+}

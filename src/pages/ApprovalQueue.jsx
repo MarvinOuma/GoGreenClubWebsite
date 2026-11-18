@@ -1,5 +1,7 @@
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { callFunction } from '../firebase/callable';
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, startAfter } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { DashboardLayout } from '../layout/DashboardLayout';
 import { useToast } from '../components/ui/ToastProvider';
@@ -14,68 +16,78 @@ const formatDate = (value) => {
 
 export const ApprovalQueue = () => {
   const toast = useToast();
+  const [status, setStatus] = useState('pending');
+  const [verifyId, setVerifyId] = useState(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [cursor, setCursor] = useState(null);
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const adminLinks = [
-    { path: '/admin', label: 'Overview' },
-    { path: '/admin/events', label: 'Event Manager' },
-    { path: '/admin/users', label: 'User Management' },
-    { path: '/admin/reports', label: 'Approval Queue' },
-    { path: '/admin/blog', label: 'Blog CMS' },
-    { path: '/admin/partners', label: 'Partners' },
-    { path: '/admin/messages', label: 'Partner Inbox' },
-  ];
-
   useEffect(() => {
     fetchReports();
-  }, []);
+  }, [status]);
 
-  const fetchReports = async () => {
+  const fetchReports = async (after = null) => {
     try {
-      const q = query(collection(db, 'impactReports'), where('status', '==', 'pending'));
+      setLoading(true);
+      const q = query(collection(db, 'impactReports'), where('status', '==', status),
+        ...(after ? [startAfter(after)] : []), limit(40));
       const snapshot = await getDocs(q);
-      setReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const page = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setReports(previous => after ? [...previous, ...page] : page);
+      setCursor(snapshot.size === 40 ? snapshot.docs.at(-1) : null);
     } catch (error) {
       console.error('Error fetching reports:', error);
-      toast.error('Load failed', 'Failed to load pending reports.');
+      toast.error('Load failed', 'Failed to load reports.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleApprove = async (report) => {
+  const reviewReport = async (reportId, decision) => {
+    setReviewing(true);
     try {
-      await updateDoc(doc(db, 'impactReports', report.id), { status: 'approved' });
-      
-      const points = (parseInt(report.wasteAmount) || 0) * 5 + (parseInt(report.treesPlanted) || 0) * 10;
-      await updateDoc(doc(db, 'users', report.userId), { greenPoints: increment(points) });
-      
-      toast.success('Approved', `Report approved (+${points} points).`);
-      fetchReports();
+      const { points, changed } = await callFunction('reviewImpactReport', { reportId, decision });
+      toast.success(decision === 'approved' ? 'Approved' : 'Rejected',
+        changed && points ? `+${points} Green Points awarded.` : undefined);
+      await fetchReports();
     } catch (error) {
-      console.error('Error approving report:', error);
-      toast.error('Approve failed', 'Please try again.');
+      toast.error('Review failed', error.message);
+    } finally {
+      setReviewing(false);
     }
   };
 
-  const handleReject = async (reportId) => {
+  const verifyReport = async () => {
+    const reportId = verifyId;
+    setVerifyId(null);
+    setReviewing(true);
     try {
-      await updateDoc(doc(db, 'impactReports', reportId), { status: 'rejected' });
-      toast.success('Rejected', 'Report rejected.');
-      fetchReports();
+      const { changed } = await callFunction('verifyLegacyImpactReport', { reportId });
+      toast.success(changed ? 'Verified for the next public summary' : 'This report was already verified');
     } catch (error) {
-      console.error('Error rejecting report:', error);
-      toast.error('Reject failed', 'Please try again.');
+      toast.error('Verification failed', error.message);
+    } finally {
+      setReviewing(false);
     }
   };
 
   return (
-    <DashboardLayout links={adminLinks} title="Approval Queue">
+    <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">Pending Reports</h1>
-          <p className="mt-2 text-sm text-gray-600">Review activity submissions and award green points.</p>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900">Impact report reviews</h1>
+          <p className="mt-2 text-sm text-gray-600">Review activity submissions, award Green Points, and verify previously approved reports.</p>
+        </div>
+
+        <div className="flex flex-wrap gap-2" aria-label="Report status">
+          {['pending', 'approved'].map(value => (
+            <button key={value} type="button" aria-pressed={status === value}
+              className={status === value ? 'btn-primary' : 'btn-secondary'}
+              disabled={loading || reviewing} onClick={() => setStatus(value)}>
+              {value === 'pending' ? 'Pending' : 'Previously approved'}
+            </button>
+          ))}
         </div>
 
         {loading ? (
@@ -91,8 +103,8 @@ export const ApprovalQueue = () => {
         ) : reports.length === 0 ? (
           <div className="rounded-3xl border border-gray-100 bg-white p-10 text-center shadow-sm">
             <p className="text-4xl">🌿</p>
-            <p className="mt-4 text-lg font-bold text-gray-900">No pending reports</p>
-            <p className="mt-2 text-sm text-gray-600">When members submit activities, they’ll appear here.</p>
+            <p className="mt-4 text-lg font-bold text-gray-900">No {status} reports</p>
+            <p className="mt-2 text-sm text-gray-600">{status === 'pending' ? 'New activity submissions will appear here.' : 'Approved reports will appear here.'}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -103,10 +115,10 @@ export const ApprovalQueue = () => {
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-extrabold tracking-tight text-gray-900">{report.activityType}</h3>
                       <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold">
-                        Pending
+                        {report.status}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-gray-600">User ID: {report.userId}</p>
+                    {report.userId && <p className="mt-1 break-all text-sm text-gray-600">User ID {report.userId}</p>}
                     {report?.createdAt ? (
                       <p className="mt-1 text-xs text-gray-500">Submitted: {formatDate(report.createdAt)}</p>
                     ) : null}
@@ -117,25 +129,39 @@ export const ApprovalQueue = () => {
                   {report.wasteAmount && <p className="text-sm">♻️ Waste: {report.wasteAmount}kg</p>}
                   {report.treesPlanted && <p className="text-sm">🌳 Trees: {report.treesPlanted}</p>}
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
+                {status === 'approved' ? (
+                  <button type="button" className="btn-secondary" disabled={reviewing} onClick={() => setVerifyId(report.id)}>
+                    Verify for public totals
+                  </button>
+                ) : <div className="flex flex-col sm:flex-row gap-2">
                   <button
-                    onClick={() => handleApprove(report)}
-                    className="flex-1 px-4 py-2 rounded-xl min-h-[44px] bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition"
+                    disabled={reviewing}
+                    onClick={() => reviewReport(report.id, 'approved')}
+                    className="flex-1 px-4 py-2 rounded-xl min-h-[44px] bg-leaf text-white font-semibold hover:bg-emerald-700 transition"
                   >
                     Approve
                   </button>
                   <button
-                    onClick={() => handleReject(report.id)}
+                    disabled={reviewing}
+                    onClick={() => reviewReport(report.id, 'rejected')}
                     className="flex-1 px-4 py-2 rounded-xl min-h-[44px] bg-red-600 text-white font-semibold hover:bg-red-700 transition"
                   >
                     Reject
                   </button>
-                </div>
+                </div>}
               </div>
             ))}
           </div>
         )}
       </div>
+      <ConfirmDialog open={Boolean(verifyId)} title="Verify this report for public totals?"
+        description="Check the original activity evidence first. Verification does not change historical Green Points."
+        confirmLabel="Verify report" tone="primary" onCancel={() => setVerifyId(null)} onConfirm={verifyReport} />
+      {cursor && !loading && (
+        <button type="button" className="btn-secondary mt-6" onClick={() => fetchReports(cursor)}>
+          Load more reports
+        </button>
+      )}
     </DashboardLayout>
   );
 };

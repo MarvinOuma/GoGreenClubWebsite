@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 import { DashboardLayout } from '../layout/DashboardLayout';
@@ -9,33 +9,43 @@ export const MemberActivities = () => {
   const { currentUser } = useAuth();
   const toast = useToast();
   const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ activityType: '', wasteAmount: '', treesPlanted: '', description: '' });
-
-  const memberLinks = [
-    { path: '/member', label: 'Dashboard' },
-    { path: '/member/profile', label: 'My Profile' },
-    { path: '/member/activities', label: 'My Activities' },
-  ];
 
   useEffect(() => {
     fetchActivities();
   }, [currentUser]);
 
   const fetchActivities = async () => {
-    const q = query(collection(db, 'impactReports'), where('userId', '==', currentUser.uid));
-    const snapshot = await getDocs(q);
-    setActivities(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const q = query(collection(db, 'impactReports'), where('userId', '==', currentUser.uid));
+      const snapshot = await getDocs(q);
+      setActivities(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving) return;
+    setSaving(true);
     try {
       await addDoc(collection(db, 'impactReports'), {
         ...formData,
+        wasteAmount: Number(formData.wasteAmount),
+        treesPlanted: Number(formData.treesPlanted),
+        description: formData.description.trim(),
         userId: currentUser.uid,
         status: 'pending',
-        createdAt: new Date()
+        createdAt: serverTimestamp()
       });
       setFormData({ activityType: '', wasteAmount: '', treesPlanted: '', description: '' });
       setShowForm(false);
@@ -44,11 +54,13 @@ export const MemberActivities = () => {
     } catch (error) {
       console.error('Error submitting activity:', error);
       toast.error('Submit failed', 'Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <DashboardLayout links={memberLinks} title="My Activities">
+    <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl md:text-3xl font-bold text-brand-green">Activities</h1>
@@ -60,10 +72,10 @@ export const MemberActivities = () => {
         {showForm && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
             <form onSubmit={handleSubmit} className="space-y-4">
-              <select
+              <select aria-label="Activity type"
                 value={formData.activityType}
                 onChange={(e) => setFormData({ ...formData, activityType: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
                 required
               >
                 <option value="">Select Activity Type</option>
@@ -73,34 +85,39 @@ export const MemberActivities = () => {
                 <option value="other">Other</option>
               </select>
               <input
-                type="number"
-                placeholder="Waste Collected (kg)"
+                type="number" min="0" max="10000" step="0.01"
+                aria-label="Waste Collected (kg)" placeholder="Waste Collected (kg)"
                 value={formData.wasteAmount}
                 onChange={(e) => setFormData({ ...formData, wasteAmount: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
               />
               <input
-                type="number"
-                placeholder="Trees Planted"
+                type="number" min="0" max="10000" step="1"
+                aria-label="Trees Planted" placeholder="Trees Planted"
                 value={formData.treesPlanted}
                 onChange={(e) => setFormData({ ...formData, treesPlanted: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
+                className="w-full form-control"
               />
               <textarea
-                placeholder="Description"
+                aria-label="Description" placeholder="Description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
-                rows={6}
+                className="w-full form-control"
+                rows={6} maxLength={2000}
                 required
               />
-              <button type="submit" className="w-full btn-primary">Submit Activity</button>
+              <button type="submit" className="w-full btn-primary" disabled={saving}>{saving ? 'Submitting…' : 'Submit activity'}</button>
             </form>
           </div>
         )}
 
         <div className="space-y-4">
-          {activities.length === 0 ? (
+          {loading ? <p role="status" className="text-muted">Loading activities…</p> : loadError ? (
+            <div className="panel p-5">
+              <p role="alert" className="mb-3 text-danger">Your activities couldn’t be loaded.</p>
+              <button type="button" className="btn-secondary" onClick={fetchActivities}>Try again</button>
+            </div>
+          ) : activities.length === 0 ? (
             <p className="text-gray-500">No activities yet. Log your first activity!</p>
           ) : (
             activities.map(activity => (

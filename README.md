@@ -1,126 +1,53 @@
-# 🌍 GoGreen Club Platform
+# GoGreen Club
 
-**Green Steps, Big Impact!**
+GoGreen Club brings together environmental action and STEAM. The website publishes club events and stories and lets members register, submit impact reports, and track Green Points. Administrators manage events, attendance, reports, accounts, posts, and partners.
 
-A full-stack web application for managing environmental club activities with gamification, role-based dashboards, and public transparency.
+## Local development
 
-## ✨ Features
+Use Node.js 22.12 or newer. The Firebase Emulator Suite also needs Java 21 or newer.
 
-### 🎮 Member Dashboard - "Impact Hub"
-- Gamified personal workspace
-- Green Points tracking
-- Activity feed with upcoming events
-- Badges and milestones
-- Impact tracker with progress bars
-- Quick action: Log Activity
-
-### 🎛️ Admin Dashboard - "Command Center"
-- Event Manager (CRUD with calendar view)
-- User Management (approve/remove users)
-- Approval Queue for Impact Reports
-- Analytics Summary (waste collected, trees planted, active members)
-- Blog CMS (create, edit, publish posts)
-
-### 🌐 Public Dashboard - "Transparency Portal"
-- No login required
-- Public Event Calendar
-- Live Impact Counter
-- News/Blog section (published posts only)
-- Impact Map placeholder
-
-## 🛠️ Tech Stack
-
-- **Frontend**: React 18 + Vite
-- **Routing**: React Router v6
-- **Styling**: Tailwind CSS
-- **Backend**: Firebase
-  - Authentication (Email/Password + Google OAuth)
-  - Firestore Database
-  - Cloud Storage
-  - Cloud Functions
-  - Hosting
-
-## 🔐 Authentication & Authorization
-
-- Email/Password authentication
-- Google OAuth
-- Role-based access control using Firebase Custom Claims
-- Default role: `member`
-- Admin role: `admin: true`
-- Cloud Function auto-assigns member role on signup
-
-## 📁 Project Structure
-
-```
-src/
-├── components/       # Reusable UI components
-├── pages/           # Page components
-├── firebase/        # Firebase config and helpers
-├── context/         # React Context (Auth)
-├── routes/          # Protected route wrapper
-└── index.css        # Tailwind + custom styles
-```
-
-## 🚀 Quick Start
-
-See [SETUP.md](./SETUP.md) for detailed instructions.
-
-```bash
-# Install dependencies
-npm install
-
-# Create .env file
-cp .env.example .env
-
-# Add your Firebase config to .env
-
-# Run development server
+```sh
+npm ci
+npm ci --prefix functions
+cp -n .env.example .env
 npm run dev
-
-# Deploy to Firebase
-npm run build
-firebase deploy
 ```
 
-## 🎨 Brand Identity
+Set the Firebase web configuration in `.env` for an authorized development project, or set `VITE_FIREBASE_EMULATORS=true` and `VITE_FIREBASE_PROJECT_ID=demo-gogreen` for local development. In emulator mode, use any non-empty demo API key and the bucket `demo-gogreen.appspot.com`. Start the services in a second terminal:
 
-- **Primary Color**: Forest Green (#15803d)
-- **Accent**: Light Green (#86efac)
-- **Logo**: Place at `public/logo.png`
-- **Tagline**: "Green Steps, Big Impact!"
+```sh
+npx firebase-tools@15.9.1 emulators:start --project demo-gogreen --only auth,firestore,functions,storage
+```
 
-## 🔒 Security
+## Approved club photographs
 
-- Firestore security rules enforce role-based access
-- Storage rules protect user uploads
-- Custom claims validate admin actions
-- Published content only visible to public
+Set `VITE_HOME_PHOTO_URL` to an approved HTTPS image or a root-relative path for a file under `public/`. Use `VITE_HOME_PHOTO_ALT` to describe the image when it adds context. Event Manager and Blog CMS accept approved photos and optional image descriptions. Use an empty description for decorative covers. The existing logo and editorial fallbacks cover unset and failed images.
 
-## 📊 Collections
+## Verification
 
-- `users` - User profiles and green points
-- `events` - Club events and activities
-- `posts` - Blog posts (CMS)
-- `impactReports` - Member activity submissions
+```sh
+npm run lint
+npm test
+npm run build
+npm run test:emulator
+npx playwright install chromium
+npm run test:browser
+```
 
-## 🌟 Key Workflows
+CI builds and runs these checks without Firebase credentials. The browser tests run the production bundle with emulator configuration. Set `GOGREEN_SCREENSHOT_DIR` to capture screenshots, or set `GOGREEN_CHROMIUM_PATH` to use a local Chromium executable. A baseline Vite server can be supplied with `GOGREEN_BASELINE_URL` for comparison captures.
 
-1. **New User Signup**
-   - Sign up → Cloud Function assigns member role → Welcome page → Complete profile → Member Dashboard
+## Application structure
 
-2. **Admin Creates Event**
-   - Admin Dashboard → Event Manager → Create Event → Visible on Public Dashboard
+- `src/pages/` contains public, member, and administrator routes. `src/layout/` and `src/components/ui/` contain shared navigation and UI components.
+- `functions/` contains trusted Firebase workflows. Transactions enforce event capacity, review reports, and adjust Green Points.
+- `firestore.rules` and `storage.rules` define client permissions. Firestore keeps user profiles, report narratives, registrations, and partner inquiries private.
+- `publicStats/overview` publishes aggregate figures. Waste and tree totals come from the trusted award ledger. A scheduled function refreshes the document hourly.
+- The visual system uses Forest, Leaf, Lime, Ivory, and Ink tokens, a shared focus treatment, and locally hosted Latin subsets of Instrument Sans and Inter under the SIL Open Font License.
 
-3. **Member Logs Activity**
-   - Member Dashboard → Log Activity → Submit Report → Admin Approval Queue
+See [release and migration notes](RELEASE.md) for configuration, legacy data review, and the staged rollout.
 
-4. **Admin Publishes Blog**
-   - Admin Dashboard → Blog CMS → Create Post → Publish → Visible on Public Dashboard
+## Profile initialization
 
-## 📝 License
+The Auth creation trigger and the authenticated `initializeMyProfile` callable share one server initializer. It reads current Auth metadata, rejects disabled accounts, preserves claims, and creates a missing profile transactionally. Existing profiles are left intact. A recovered profile receives the sum of its current trusted award ledger entries. Invalid ledger values require administrator review. Historical points without ledger evidence need the separate approved recovery process.
 
-MIT
-
----
-
-**Made with 💚 for environmental impact**
+Login checks for a profile and initializes it when absent. Incomplete profiles go through Welcome before member actions. Initialization errors offer a retry, and the backend and Firestore rules enforce member eligibility independently of routing. Staging must deploy the callable before the matching frontend and rules. The initializer is scoped to the caller's UID and accepts no client profile fields.

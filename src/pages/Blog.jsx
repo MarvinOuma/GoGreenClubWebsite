@@ -1,5 +1,7 @@
+import { EditorialPhoto } from '../components/ui/EditorialPhoto';
+import { FiFeather } from 'react-icons/fi';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 
@@ -28,27 +30,14 @@ const getExcerpt = (content, maxLen = 150) => {
 };
 
 const BlogHeader = () => (
-  <div className="relative overflow-hidden bg-gradient-to-b from-green-50 to-white">
-    <div className="pointer-events-none absolute inset-0">
-      <div className="absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-green-200/40 blur-3xl" />
-      <div className="absolute -bottom-24 right-0 h-72 w-72 rounded-full bg-emerald-200/30 blur-3xl" />
+  <header className="bg-forest text-white">
+    <div className="site-container grid items-end gap-4 py-12 sm:py-16 md:grid-cols-2">
+      <h1 className="site-heading">GoGreen Club Blog</h1>
+      <p className="max-w-sm text-base leading-relaxed text-emerald-100 md:justify-self-end">
+        Stories, events, and sustainability initiatives from Machakos University.
+      </p>
     </div>
-    <div className="relative mx-auto max-w-6xl px-4 py-14 sm:py-16">
-      <div className="mx-auto max-w-2xl text-center">
-        <p className="inline-flex items-center gap-2 rounded-full bg-green-100 px-4 py-1.5 text-xs font-semibold text-brand-green">
-          GoGreen Club
-          <span className="h-1 w-1 rounded-full bg-brand-green/70" />
-          Blog
-        </p>
-        <h1 className="mt-4 text-balance text-3xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
-          GoGreen Club Blog
-        </h1>
-        <p className="mt-4 text-pretty text-sm text-gray-600 sm:text-base">
-          Stories, events, and sustainability initiatives from Machakos University.
-        </p>
-      </div>
-    </div>
-  </div>
+  </header>
 );
 
 const BlogFilters = ({ search, onSearch, tags, activeTag, onTag }) => (
@@ -57,7 +46,8 @@ const BlogFilters = ({ search, onSearch, tags, activeTag, onTag }) => (
       <input
         value={search}
         onChange={(e) => onSearch(e.target.value)}
-        placeholder="Search posts by title..."
+        aria-label="Search blog posts"
+        placeholder="Search posts by title"
         className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 pr-10 text-sm text-gray-900 shadow-sm outline-none transition focus:border-green-300 focus:ring-4 focus:ring-green-100"
       />
       <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -82,7 +72,7 @@ const BlogFilters = ({ search, onSearch, tags, activeTag, onTag }) => (
           onClick={() => onTag(tag)}
           className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
             activeTag === tag
-              ? 'bg-green-600 text-white shadow-sm'
+              ? 'bg-leaf text-white shadow-sm'
               : 'bg-green-50 text-brand-green hover:bg-green-100'
           }`}
           title={`Filter by ${tag}`}
@@ -110,7 +100,7 @@ const SkeletonCard = () => (
   </div>
 );
 
-const TagPills = ({ tags, activeTag, onTagClick, onOpen }) => (
+const TagPills = ({ tags, activeTag, onTagClick }) => (
   <div className="flex flex-wrap gap-2">
     {(tags ?? []).map((tag) => (
       <button
@@ -120,97 +110,66 @@ const TagPills = ({ tags, activeTag, onTagClick, onOpen }) => (
           e.stopPropagation();
           onTagClick?.(tag);
         }}
-        className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-          activeTag === tag ? 'bg-green-600 text-white' : 'bg-green-50 text-brand-green hover:bg-green-100'
+        className={`relative z-10 rounded-full px-3 py-1 text-xs font-semibold transition ${
+          activeTag === tag ? 'bg-leaf text-white' : 'bg-green-50 text-brand-green hover:bg-green-100'
         }`}
       >
         {tag}
       </button>
     ))}
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen?.();
-      }}
-      className="ml-auto inline-flex items-center gap-1 rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-gray-800"
-    >
-      Read More
-      <span aria-hidden className="text-white/80">→</span>
-    </button>
+
   </div>
 );
 
-const BlogCard = ({ post, activeTag, onTagClick, onOpen }) => {
-  const imageUrl = post?.coverImageUrl;
+const BlogCard = ({ post, activeTag, onTagClick }) => {
   return (
     <article
-      onClick={onOpen}
-      className="group cursor-pointer overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="relative h-44 overflow-hidden bg-gray-100">
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={post?.title ?? 'Blog cover'}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            loading="lazy"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-gray-500">
-            GoGreen Club
-          </div>
-        )}
+        <EditorialPhoto src={post?.coverImageUrl} alt={post?.coverImageAlt} className="h-full"
+          imageClassName="h-full w-full object-cover"
+          fallback={<div className="editorial-cover h-full" aria-hidden="true"><FiFeather size={32} /></div>} />
       </div>
       <div className="space-y-3 p-5">
         <div className="space-y-1">
           <h3 className="text-pretty text-lg font-extrabold tracking-tight text-gray-900 group-hover:text-brand-green">
-            {post?.title ?? 'Untitled post'}
+            <Link to={`/blog/${post.id}`} className="card-action">{post.title}</Link>
           </h3>
           <p className="text-xs text-gray-500">
             <span className="font-semibold text-gray-700">{post?.authorName ?? 'Unknown author'}</span>
-            {post?.createdAt ? <span className="text-gray-400"> · {formatDate(post.createdAt)}</span> : null}
+            {post?.createdAt ? <span className="text-muted"> · {formatDate(post.createdAt)}</span> : null}
           </p>
         </div>
 
         <p className="text-sm leading-relaxed text-gray-600">{getExcerpt(post?.content, 150)}</p>
 
-        <TagPills tags={post?.tags} activeTag={activeTag} onTagClick={onTagClick} onOpen={onOpen} />
+        <TagPills tags={post?.tags} activeTag={activeTag} onTagClick={onTagClick} />
       </div>
     </article>
   );
 };
 
-const FeaturedPost = ({ post, activeTag, onTagClick, onOpen }) => {
+const FeaturedPost = ({ post, activeTag, onTagClick }) => {
   if (!post) return null;
   return (
     <div className="overflow-hidden rounded-3xl border border-green-100 bg-gradient-to-br from-white to-green-50 shadow-sm">
       <div className="grid gap-0 md:grid-cols-2">
         <div className="relative h-56 overflow-hidden bg-gray-100 md:h-full">
-          {post?.coverImageUrl ? (
-            <img
-              src={post.coverImageUrl}
-              alt={post?.title ?? 'Featured post'}
-              className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-gray-500">
-              Featured
-            </div>
-          )}
+          <EditorialPhoto src={post?.coverImageUrl} alt={post?.coverImageAlt} className="h-full"
+            imageClassName="h-full w-full object-cover"
+            fallback={<div className="editorial-cover h-full" aria-hidden="true"><FiFeather size={40} /></div>} />
           <div className="absolute left-4 top-4 rounded-full bg-brand-green px-3 py-1 text-xs font-bold text-white shadow-sm">
             Featured
           </div>
         </div>
         <div className="p-6 md:p-8">
-          <p className="text-xs font-semibold text-brand-green">Latest story</p>
           <h2 className="mt-2 text-balance text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl">
             {post?.title ?? 'Untitled post'}
           </h2>
           <p className="mt-2 text-sm text-gray-500">
             <span className="font-semibold text-gray-700">{post?.authorName ?? 'Unknown author'}</span>
-            {post?.createdAt ? <span className="text-gray-400"> · {formatDate(post.createdAt)}</span> : null}
+            {post?.createdAt ? <span className="text-muted"> · {formatDate(post.createdAt)}</span> : null}
           </p>
           <p className="mt-4 text-sm leading-relaxed text-gray-700">{getExcerpt(post?.content, 220)}</p>
 
@@ -225,21 +184,19 @@ const FeaturedPost = ({ post, activeTag, onTagClick, onOpen }) => {
                 }}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                   activeTag === tag
-                    ? 'bg-green-600 text-white shadow-sm'
+                    ? 'bg-leaf text-white shadow-sm'
                     : 'bg-green-100 text-brand-green hover:bg-green-200'
                 }`}
               >
                 {tag}
               </button>
             ))}
-            <button
-              type="button"
-              onClick={onOpen}
-              className="ml-auto inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-800"
+            <Link to={`/blog/${post.id}`}
+                      className="ml-auto inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-800"
             >
               Read More
               <span aria-hidden className="text-white/80">→</span>
-            </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -254,7 +211,6 @@ export const Blog = () => {
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState('');
   const [visibleCount, setVisibleCount] = useState(6);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchPosts = async () => {
@@ -318,9 +274,9 @@ export const Blog = () => {
   const visiblePosts = remainingPosts.slice(0, cardsToShow);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ivory">
       <BlogHeader />
-      <div className="mx-auto max-w-6xl px-4 py-10">
+      <div className="site-container py-10">
         <div className="space-y-6">
           <BlogFilters
             search={search}
@@ -355,7 +311,6 @@ export const Blog = () => {
                 post={featuredPost}
                 activeTag={activeTag}
                 onTagClick={setActiveTag}
-                onOpen={() => navigate(`/blog/${featuredPost?.id}`)}
               />
 
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -365,7 +320,6 @@ export const Blog = () => {
                     post={post}
                     activeTag={activeTag}
                     onTagClick={setActiveTag}
-                    onOpen={() => navigate(`/blog/${post.id}`)}
                   />
                 ))}
               </div>

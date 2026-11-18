@@ -1,128 +1,113 @@
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { FiMenu, FiX } from 'react-icons/fi';
+import { useEffect, useId, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { logout } from '../firebase/auth';
-import { useEffect, useState } from 'react';
+import { adminLinks, memberLinks } from '../layout/dashboardLinks';
+import { Dialog } from './ui/Dialog';
 import { useToast } from './ui/ToastProvider';
 
-export const Navbar = () => {
+const publicLinks = [
+  { path: '/', label: 'Home' }, { path: '/about', label: 'About' },
+  { path: '/events', label: 'Events' }, { path: '/blog', label: 'Blog' },
+];
+
+const linkClass = ({ isActive }) => `flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold ${isActive
+  ? 'bg-ivory text-forest' : 'text-muted hover:bg-ivory hover:text-forest'}`;
+
+function NavigationLinks({ links, onNavigate, exact = false }) {
+  return links.map(({ path, label }) => (
+    <NavLink to={path} key={path} end={exact || path === '/'} className={linkClass} onClick={onNavigate}>
+      {label}
+    </NavLink>
+  ));
+}
+
+export function Navbar() {
   const { currentUser, isAdminUser } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
+  const { pathname } = useLocation();
   const toast = useToast();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const titleId = useId();
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+
+  useEffect(() => { setOpen(false); }, [pathname]);
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const closeOnDesktop = ({ matches }) => { if (matches) setOpen(false); };
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => desktop.removeEventListener('change', closeOnDesktop);
+  }, []);
 
   const handleLogout = async () => {
     try {
       await logout();
-      toast.success('Signed out', 'See you next time.');
+      close();
+      toast.success('Signed out');
       navigate('/');
-    } catch (e) {
-      console.error('Logout failed:', e);
+    } catch {
+      close();
       toast.error('Sign out failed', 'Please try again.');
     }
   };
 
-  const closeMobile = () => setMobileMenuOpen(false);
-
-  useEffect(() => {
-    closeMobile();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
-
-  const navLinkClass = ({ isActive }) =>
-    `text-sm font-semibold transition ${
-      isActive ? 'text-brand-green' : 'text-gray-700 hover:text-brand-green'
-    }`;
+  const accountAction = currentUser ? (
+    <button type="button" className="btn-secondary text-sm" onClick={handleLogout}>Sign out</button>
+  ) : (
+    <>
+      <NavLink to="/login" className={linkClass} onClick={close}>Sign in</NavLink>
+      <Link to="/signup" className="btn-primary text-sm" onClick={close}>Join the club</Link>
+    </>
+  );
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-green-100 bg-white/80 backdrop-blur">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <Link to="/" className="flex items-center space-x-3">
-            <img src="/logo.png" alt="GoGreen Club" className="h-10 w-10" />
-            <span className="text-lg font-extrabold tracking-tight text-brand-green hidden sm:block">GoGreen Club</span>
+    <header className="sticky top-0 z-30 border-b border-line bg-white">
+      <nav aria-label="Main navigation" className="site-container">
+        <div className="flex h-16 items-center justify-between gap-3">
+          <Link to="/" className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-forest">
+            <img src="/logo.png" alt="" className="size-10 shrink-0 object-contain" width="40" height="40" />
+            GoGreen Club
           </Link>
-
-          {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-6">
-            <NavLink to="/" end className={navLinkClass}>
-              Home
-            </NavLink>
-            <NavLink to="/about" className={navLinkClass}>
-              About
-            </NavLink>
-            <NavLink to="/events" className={navLinkClass}>
-              Events
-            </NavLink>
-            <NavLink to="/blog" className={navLinkClass}>
-              Blog
-            </NavLink>
-            
-            {currentUser ? (
-              <>
-                <NavLink to="/member" className={navLinkClass}>
-                  Dashboard
-                </NavLink>
-                {isAdminUser && (
-                  <NavLink to="/admin" className={navLinkClass}>
-                    Admin
-                  </NavLink>
-                )}
-                <button onClick={handleLogout} className="btn-secondary text-sm py-2">
-                  Logout
-                </button>
-              </>
-            ) : (
-              <>
-                <NavLink to="/login" className={navLinkClass}>
-                  Login
-                </NavLink>
-                <Link to="/signup" className="btn-primary text-sm py-2">Join Now</Link>
-              </>
-            )}
+          <div className="hidden items-center gap-1 lg:flex">
+            <NavigationLinks links={publicLinks} />
+            {currentUser && <NavLink to="/member" className={linkClass}>Dashboard</NavLink>}
+            {isAdminUser && <NavLink to="/admin" className={linkClass}>Admin</NavLink>}
+            {accountAction}
           </div>
-
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setMobileMenuOpen((v) => !v)}
-            className="md:hidden rounded-xl p-2 text-gray-700 hover:bg-green-50"
-            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+          <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}
+            className="btn-secondary px-3 py-2 text-sm lg:hidden">
+            <FiMenu aria-hidden="true" size={19} /> Menu
           </button>
         </div>
-      </div>
-
-      {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-200 bg-white animate-fade-in">
-          <div className="px-4 py-4 space-y-3">
-            <Link to="/" onClick={closeMobile} className={`block py-2 font-semibold ${location.pathname === '/' ? 'text-brand-green' : 'text-gray-700'}`}>Home</Link>
-            <Link to="/about" onClick={closeMobile} className={`block py-2 font-semibold ${location.pathname === '/about' ? 'text-brand-green' : 'text-gray-700'}`}>About</Link>
-            <Link to="/events" onClick={closeMobile} className={`block py-2 font-semibold ${location.pathname === '/events' ? 'text-brand-green' : 'text-gray-700'}`}>Events</Link>
-            <Link to="/blog" onClick={closeMobile} className={`block py-2 font-semibold ${location.pathname.startsWith('/blog') ? 'text-brand-green' : 'text-gray-700'}`}>Blog</Link>
-            
-            {currentUser ? (
-              <>
-                <Link to="/member" onClick={closeMobile} className={`block py-2 font-semibold ${location.pathname.startsWith('/member') ? 'text-brand-green' : 'text-gray-700'}`}>Dashboard</Link>
-                {isAdminUser && (
-                  <Link to="/admin" onClick={closeMobile} className={`block py-2 font-semibold ${location.pathname.startsWith('/admin') ? 'text-brand-green' : 'text-gray-700'}`}>Admin</Link>
-                )}
-                <button onClick={() => { handleLogout(); closeMobile(); }} className="w-full btn-secondary text-sm py-3 mt-2">
-                  Logout
-                </button>
-              </>
-            ) : (
-              <>
-                <Link to="/login" onClick={closeMobile} className={`block py-2 font-semibold ${location.pathname === '/login' ? 'text-brand-green' : 'text-gray-700'}`}>Login</Link>
-                <Link to="/signup" onClick={closeMobile} className="block w-full btn-primary text-sm py-3 mt-2 text-center">Join Now</Link>
-              </>
-            )}
-          </div>
+      </nav>
+      <Dialog open={open} onClose={close} titleId={titleId} className="dialog-drawer max-w-sm">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-white px-5 py-3">
+          <h2 id={titleId} className="text-xl font-semibold text-forest">GoGreen Club menu</h2>
+          <button type="button" onClick={close} aria-label="Close menu" className="btn-secondary px-3 py-2">
+            <FiX aria-hidden="true" size={19} />
+          </button>
         </div>
-      )}
-    </nav>
+        <div className="space-y-5 p-5">
+          <nav aria-label="Public pages">
+            <h3 className="px-3 text-sm font-semibold text-forest">Public pages</h3>
+            <div className="mt-1 grid grid-cols-2"><NavigationLinks links={publicLinks} onNavigate={close} /></div>
+          </nav>
+          {currentUser && (
+            <nav aria-label="Impact Hub" className="border-t border-line pt-4">
+              <h3 className="px-3 text-sm font-semibold text-forest">Impact Hub</h3>
+              <div className="mt-1 grid grid-cols-2"><NavigationLinks links={memberLinks} onNavigate={close} exact /></div>
+            </nav>
+          )}
+          {isAdminUser && (
+            <nav aria-label="Command Center" className="border-t border-line pt-4">
+              <h3 className="px-3 text-sm font-semibold text-forest">Command Center</h3>
+              <NavigationLinks links={adminLinks} onNavigate={close} exact />
+            </nav>
+          )}
+          <div className="grid gap-2 border-t border-line pt-4">{accountAction}</div>
+        </div>
+      </Dialog>
+    </header>
   );
-};
+}
