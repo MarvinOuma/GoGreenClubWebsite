@@ -73,6 +73,24 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "pointAwards",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "treesPlanted",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "wasteKg",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
