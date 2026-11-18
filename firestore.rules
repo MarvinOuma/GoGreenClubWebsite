@@ -15,7 +15,11 @@ service cloud.firestore {
 
     function activeMember() {
       return signedIn() && exists(profilePath()) &&
-        get(profilePath()).data.get('isActive', true) == true;
+        get(profilePath()).data.get('isActive', true) == true &&
+        get(profilePath()).data.get('deleting', false) == false &&
+        textWithin(get(profilePath()).data.get('name', ''), 120) &&
+        textWithin(get(profilePath()).data.get('branch', ''), 120) &&
+        validInterests(get(profilePath()).data.get('interests', null));
     }
 
     function isAdmin() {
@@ -64,9 +68,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow list: if isAdmin();
       allow get: if own(userId) || isAdmin();
-      allow create: if own(userId) &&
-        request.resource.data.keys().hasOnly(['name', 'branch', 'interests']) && validProfile();
-      allow update: if (own(userId) && activeMember() && validProfile() &&
+      allow update: if (own(userId) && resource.data.get('isActive', true) == true &&
+        resource.data.get('deleting', false) == false && validProfile() &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'branch', 'interests']));
     }
 

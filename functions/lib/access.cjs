@@ -16,14 +16,17 @@ function actorId(context) {
 }
 
 function active(profile) {
-  return profile.exists && profile.get('isActive') !== false && !profile.get('deleting');
+  return profile.exists && profile.get('isActive') !== false && !profile.get('deleting') &&
+    typeof profile.get('name') === 'string' && profile.get('name').trim().length > 0 &&
+    typeof profile.get('branch') === 'string' && profile.get('branch').trim().length > 0 &&
+    Array.isArray(profile.get('interests'));
 }
 
 async function requireAdmin(transaction, db, context) {
   const uid = actorId(context);
   if (context.auth.token.admin !== true) fail('permission-denied', 'Administrator access is required.');
   const profile = await transaction.get(db.collection('users').doc(uid));
-  if (profile.exists && (!active(profile) || profile.get('adminRevoked') === true)) {
+  if (profile.exists && (profile.get('isActive') === false || profile.get('deleting') || profile.get('adminRevoked') === true)) {
     fail('permission-denied', 'Administrator access is required.');
   }
   return uid;

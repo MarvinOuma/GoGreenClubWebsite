@@ -1,7 +1,8 @@
+import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
-import { after, before, test } from 'node:test';
+import { after, before, test, mock } from 'node:test';
 import { deleteApp, initializeApp } from 'firebase/app';
-import { connectAuthEmulator, getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { connectAuthEmulator, getAuth, signInWithEmailAndPassword, signInWithCredential, GoogleAuthProvider, createUserWithEmailAndPassword } from 'firebase/auth';
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/functions';
 import { auth, bucket, db, makeAccount, password, projectId } from './emulatorFixture.mjs';
 
@@ -161,4 +162,107 @@ test('role transitions validate input and deny a demoted administrator with an o
   const demoted = await client('workflow-role-admin', true);
   await administrator('updateUserRole', { userId: 'workflow-role-admin', role: 'member' });
   await assert.rejects(demoted('refreshPublicStats', {}), { code: 'functions/permission-denied' });
+});
+
+
+test('missing profiles initialize concurrently without accepting managed fields or overwriting data', async () => {
+  const uid = 'initialization-existing';
+  await auth.importUsers([{ uid, email: uid + '@example.test' }]);
+  await auth.updateUser(uid, { password });
+  const member = await client(uid);
+  await db.doc(`users/${uid}`).delete();
+  await db.doc('pointAwards/initialization-verified').set({ userId: uid, type: 'impact', points: 125 });
+  await assert.rejects(member('initializeMyProfile', { greenPoints: 999 }), { code: 'functions/invalid-argument' });
+  await assert.rejects(anonymous('initializeMyProfile', {}), { code: 'functions/unauthenticated' });
+  const results = await Promise.all(Array.from({ length: 4 }, () => member('initializeMyProfile', {})));
+  assert.equal(results.filter(result => result.created).length, 1);
+  const ref = db.doc(`users/${uid}`);
+  assert.equal((await ref.get()).get('name'), '');
+  assert.equal((await ref.get()).get('greenPoints'), 125);
+  await assert.rejects(member('registerForEvent', { eventId: 'workflow-capacity' }), { code: 'functions/permission-denied' });
+  await ref.update({ name: 'Completed', branch: 'Test', greenPoints: 485 });
+  const require = createRequire(import.meta.url);
+  const { assignMemberRole } = require('../functions/profileInitialization.js');
+  const before = (await ref.get()).data();
+  await assignMemberRole.run({ uid });
+  await member('initializeMyProfile', {});
+  assert.deepEqual((await ref.get()).data(), before);
+});
+
+test('administrator initialization preserves Auth claims and disabled accounts are denied', async () => {
+  const uid = 'initialization-admin';
+  const administrator = await client(uid, true);
+  await auth.setCustomUserClaims(uid, { admin: true, role: 'admin', customFlag: 'preserve' });
+  await db.doc(`users/${uid}`).delete();
+  await administrator('initializeMyProfile', {});
+  assert.equal((await db.doc(`users/${uid}`).get()).get('role'), 'admin');
+  assert.deepEqual((await auth.getUser(uid)).customClaims, { admin: true, role: 'admin', customFlag: 'preserve' });
+  const disabledId = 'initialization-disabled';
+  const disabled = await client(disabledId);
+  await db.doc(`users/${disabledId}`).delete();
+  await auth.updateUser(disabledId, { disabled: true });
+  await assert.rejects(disabled('initializeMyProfile', {}));
+  assert.equal((await db.doc(`users/${disabledId}`).get()).exists, false);
+  assert.equal((await auth.getUser(disabledId)).disabled, true);
+});
+
+test('a missed creation trigger is repaired on authenticated initialization', async () => {
+  const uid = 'initialization-google';
+  const member = await client(uid);
+  await auth.updateUser(uid, { providerToLink: { providerId: 'google.com', uid: 'synthetic-google-subject', email: 'synthetic-google@example.test' } });
+  await db.doc(`users/${uid}`).delete();
+  const require = createRequire(import.meta.url);
+  const { assignMemberRole } = require('../functions/profileInitialization.js');
+  await member('initializeMyProfile', {});
+  const before = (await db.doc(`users/${uid}`).get()).data();
+  await assignMemberRole.run({ uid });
+  assert.deepEqual((await db.doc(`users/${uid}`).get()).data(), before);
+});
+
+
+test('new email and first Google authentication initialize through the same workflow', async () => {
+  for (const provider of ['email', 'google']) {
+    const app = initializeApp({ projectId, apiKey: 'demo-key' }, 'new-provider-' + provider);
+    apps.push(app);
+    const clientAuth = getAuth(app);
+    connectAuthEmulator(clientAuth, 'http://127.0.0.1:9099', { disableWarnings: true });
+    let result;
+    if (provider === 'email') {
+      result = await createUserWithEmailAndPassword(clientAuth, 'fresh-email@example.test', password);
+    } else {
+      const encode = object => Buffer.from(JSON.stringify(object)).toString('base64url');
+      const token = encode({ alg: 'none', typ: 'JWT' }) + '.' + encode({
+        sub: 'fresh-google-subject', iss: 'https://accounts.google.com', aud: 'demo-client',
+        email: 'fresh-google@example.test', email_verified: true,
+        iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600,
+      }) + '.';
+      result = await signInWithCredential(clientAuth, GoogleAuthProvider.credential(token));
+    }
+    const functions = getFunctions(app);
+    connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+    await httpsCallable(functions, 'initializeMyProfile')({});
+    const profile = (await db.doc('users/' + result.user.uid).get()).data();
+    assert.equal(profile.role, 'member');
+    assert.equal(profile.greenPoints, 0);
+    assert.equal(profile.isActive, true);
+  }
+});
+
+
+test('first login recovers after a creation handler write failure', async () => {
+  const uid = 'initialization-trigger-failure';
+  await auth.importUsers([{ uid, email: uid + '@example.test' }]);
+  await auth.updateUser(uid, { password });
+  const member = await client(uid);
+  await db.doc(`users/${uid}`).delete();
+  const require = createRequire(import.meta.url);
+  const { assignMemberRole } = require('../functions/profileInitialization.js');
+  const failure = mock.method(db, 'runTransaction', async () => { throw new Error('Simulated transient write failure'); });
+  try {
+    await assert.rejects(assignMemberRole.run({ uid }), /Simulated transient write failure/);
+  } finally {
+    failure.mock.restore();
+  }
+  await member('initializeMyProfile', {});
+  assert.equal((await db.doc(`users/${uid}`).get()).exists, true);
 });

@@ -11,12 +11,10 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [access, setAccess] = useState({ loading: true });
   const sequence = useRef(0);
-  const previousUid = useRef();
 
   const loadAccess = useCallback(async user => {
     const version = ++sequence.current;
-    if (previousUid.current !== user?.uid) setAccess({ loading: true });
-    previousUid.current = user?.uid;
+    setAccess({ loading: true });
     setCurrentUser(user);
     try {
       const profile = user ? await getAuthProfile(user) : {};
@@ -33,6 +31,7 @@ export function AuthProvider({ children }) {
 
   const refreshAccess = async () => {
     if (!auth.currentUser) return;
+    setAccess({ loading: true });
     try {
       await auth.currentUser.getIdToken(true);
       await loadAccess(auth.currentUser);
@@ -46,6 +45,7 @@ export function AuthProvider({ children }) {
       currentUser,
       isAdminUser: access.hasAdminClaim === true,
       isActive: access.isActive,
+      onboardingComplete: access.onboardingComplete,
       accessError: access.error,
       loading: access.loading,
       refreshAccess,

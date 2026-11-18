@@ -22,6 +22,7 @@ before(async () => {
     const db = context.firestore();
     await Promise.all([
       setDoc(doc(db, 'users/rules-member'), profile),
+      setDoc(doc(db, 'users/rules-incomplete'), { name: '', branch: '', interests: [], isActive: true }),
       setDoc(doc(db, 'users/rules-other'), { ...profile, isActive: false }),
       setDoc(doc(db, 'users/rules-revoked'), { adminRevoked: true }),
       setDoc(doc(db, 'events/rules-event'), { isPublic: true, registeredCount: 0 }),
@@ -53,7 +54,7 @@ test('public access is limited to published content and the aggregate document',
 
 test('members can onboard and edit profile text without changing managed fields', async () => {
   const fresh = env.authenticatedContext('rules-new').firestore();
-  await assertSucceeds(setDoc(doc(fresh, 'users/rules-new'), profile));
+  await assertFails(setDoc(doc(fresh, 'users/rules-new'), profile));
   const db = env.authenticatedContext('rules-member').firestore();
   const self = doc(db, 'users/rules-member');
   await assertSucceeds(updateDoc(self, { name: 'Updated member' }));
@@ -77,6 +78,13 @@ test('member reports require a pending state, valid fields, and server timestamp
   ]) await assertFails(setDoc(doc(db, 'impactReports/rules-invalid'), { ...report(), ...patch }));
   const inactive = env.authenticatedContext('rules-other').firestore();
   await assertFails(setDoc(doc(inactive, 'impactReports/rules-inactive'), { ...report(), userId: 'rules-other' }));
+});
+
+test('an initialized account must complete onboarding before member submissions', async () => {
+  const db = env.authenticatedContext('rules-incomplete').firestore();
+  await assertFails(setDoc(doc(db, 'impactReports/rules-incomplete'), { ...report(), userId: 'rules-incomplete' }));
+  await assertSucceeds(updateDoc(doc(db, 'users/rules-incomplete'), profile));
+  await assertSucceeds(setDoc(doc(db, 'impactReports/rules-completed'), { ...report(), userId: 'rules-incomplete' }));
 });
 
 test('only the server can mutate registrations, awards, and event counters', async () => {

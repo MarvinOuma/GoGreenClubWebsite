@@ -2,7 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { db, makeAccount, password } from './emulatorFixture.mjs';
+import { auth, db, makeAccount, password } from './emulatorFixture.mjs';
 
 const screenshots = process.env.GOGREEN_SCREENSHOT_DIR;
 const baseline = process.env.GOGREEN_BASELINE_URL;
@@ -319,6 +319,41 @@ test('email signup and profile completion work with the Auth trigger', async ({ 
   await page.getByRole('textbox', { name: /Interests/ }).fill('Recycling, Planting');
   await page.getByRole('button', { name: 'Get Started' }).click();
   await expect(page.getByRole('heading', { name: 'New Test Member' })).toBeVisible();
+});
+
+test('historical missing profile goes through onboarding before member actions', async ({ page }) => {
+  const email = await makeAccount('browser-historical');
+  await db.doc('users/browser-historical').delete();
+  await page.goto('/login');
+  await page.getByPlaceholder('Email', { exact: true }).fill(email);
+  await page.getByPlaceholder('Password', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Login', exact: true }).click();
+  await expect(page).toHaveURL(/\/welcome$/);
+  await expect(page.getByRole('heading', { name: 'Complete Your Profile' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Full Name' }).fill('Recovered Test Member');
+  await page.getByRole('textbox', { name: 'Branch/Department' }).fill('Testing');
+  await page.getByRole('textbox', { name: /Interests/ }).fill('Recycling');
+  await page.getByRole('button', { name: 'Get Started' }).click();
+  await expect(page.getByRole('heading', { name: 'Recovered Test Member' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Recovered Test Member' })).toBeVisible();
+});
+
+test('initialization errors offer a retry without admitting the member', async ({ page }) => {
+  const uid = 'browser-initialization-failure';
+  await auth.importUsers([{ uid, email: uid + '@example.test' }]);
+  await auth.updateUser(uid, { password });
+  await page.route('**/initializeMyProfile', route => route.abort());
+  await page.goto('/login');
+  await page.getByPlaceholder('Email', { exact: true }).fill(uid + '@example.test');
+  await page.getByPlaceholder('Password', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Login', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'We couldn’t verify your access' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your impact' })).toHaveCount(0);
+  await page.unroute('**/initializeMyProfile');
+  await page.getByRole('button', { name: 'Refresh access' }).click();
+  await expect(page).toHaveURL(/\/welcome$/);
+  await expect(page.getByRole('heading', { name: 'Complete Your Profile' })).toBeVisible();
 });
 
 test('capture baseline routes from the audited commit', async ({ browser }) => {

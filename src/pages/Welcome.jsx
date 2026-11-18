@@ -6,8 +6,9 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/ToastProvider';
 
 export const Welcome = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, isAdminUser, refreshAccess } = useAuth();
   const toast = useToast();
+  const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const [branch, setBranch] = useState('');
   const [interests, setInterests] = useState('');
@@ -15,6 +16,8 @@ export const Welcome = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving) return;
+    setSaving(true);
     try {
       await setDoc(doc(db, 'users', currentUser.uid), {
         name: name.trim(),
@@ -24,10 +27,13 @@ export const Welcome = () => {
           .map((i) => i.trim())
           .filter(Boolean),
       }, { merge: true });
-      navigate('/member');
+      await refreshAccess();
+      navigate(isAdminUser ? '/admin' : '/member', { replace: true });
     } catch (err) {
       console.error(err);
       toast.error('Setup failed', err?.message ?? 'Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -70,8 +76,8 @@ export const Welcome = () => {
             className="w-full form-control"
             required
           />
-          <button type="submit" className="w-full btn-primary">
-            Get Started
+          <button type="submit" disabled={saving} className="w-full btn-primary">
+            {saving ? 'Saving…' : 'Get Started'}
           </button>
         </form>
       </div>

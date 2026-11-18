@@ -2,25 +2,11 @@ const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestor
 const { getAuth } = require('firebase-admin/auth');
 const { getStorage } = require('firebase-admin/storage');
 const { randomUUID } = require('node:crypto');
-const { auth, runWith } = require('firebase-functions/v1');
+const { runWith } = require('firebase-functions/v1');
 const { active, documentId, fail, requireAdmin } = require('./lib/access.cjs');
 const { removeAccountRegistrations } = require('./eventWorkflows').internals;
 
 const stamp = () => FieldValue.serverTimestamp();
-
-exports.assignMemberRole = auth.user().onCreate(async (user) => {
-  const db = getFirestore();
-  const ref = db.collection('users').doc(user.uid);
-  await db.runTransaction(async transaction => {
-    const profile = await transaction.get(ref);
-    const defaults = {
-      role: 'member', isActive: true, greenPoints: 0, createdAt: stamp(),
-      ...(user.email ? { email: user.email } : {}),
-    };
-    const missing = Object.fromEntries(Object.entries(defaults).filter(([key]) => profile.get(key) === undefined));
-    if (Object.keys(missing).length) transaction.set(ref, missing, { merge: true });
-  });
-});
 
 const accountChange = (operation) => runWith({ timeoutSeconds: 120 }).https.onCall(async (data, context) => {
   const uid = documentId(data?.userId);

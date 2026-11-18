@@ -45,3 +45,9 @@ CI builds and runs these checks without Firebase credentials. The browser tests 
 - The visual system uses Forest, Leaf, Lime, Ivory, and Ink tokens, a shared focus treatment, and locally hosted Latin subsets of Instrument Sans and Inter under the SIL Open Font License.
 
 See [release and migration notes](RELEASE.md) for configuration, legacy data review, and the staged rollout.
+
+## Profile initialization
+
+The Auth creation trigger and the authenticated `initializeMyProfile` callable share one server initializer. It reads current Auth metadata, rejects disabled accounts, preserves claims, and creates a missing profile transactionally. Existing profiles are left intact. A recovered profile receives the sum of its current trusted award ledger entries. Invalid ledger values require administrator review. Historical points without ledger evidence need the separate approved recovery process.
+
+Login checks for a profile and initializes it when absent. Incomplete profiles go through Welcome before member actions. Initialization errors offer a retry, and the backend and Firestore rules enforce member eligibility independently of routing. Staging must deploy the callable before the matching frontend and rules. The initializer is scoped to the caller's UID and accepts no client profile fields.

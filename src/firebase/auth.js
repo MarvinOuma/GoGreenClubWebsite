@@ -6,6 +6,7 @@ import {
   signOut
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { callFunction } from './callable';
 import { auth, db } from './firebaseConfig';
 
 export const signUpWithEmail = (email, password) => {
@@ -27,10 +28,20 @@ export const logout = () => {
 
 export async function getAuthProfile(user) {
   const { claims } = await user.getIdTokenResult();
-  const profile = (await getDoc(doc(db, 'users', user.uid))).data();
-  const isActive = profile?.isActive !== false;
+  let snapshot = await getDoc(doc(db, 'users', user.uid));
+  if (!snapshot.exists()) {
+    await callFunction('initializeMyProfile', {});
+    snapshot = await getDoc(doc(db, 'users', user.uid));
+  }
+  if (!snapshot.exists()) throw new Error('Your profile could not be initialized. Please retry.');
+  const profile = snapshot.data();
+  const isActive = profile.isActive !== false && !profile.deleting;
+  const onboardingComplete = typeof profile.name === 'string' && profile.name.trim().length > 0 &&
+    typeof profile.branch === 'string' && profile.branch.trim().length > 0 &&
+    Array.isArray(profile.interests);
   return {
-    hasAdminClaim: claims.admin === true && isActive && profile?.adminRevoked !== true,
+    hasAdminClaim: claims.admin === true && isActive && profile.adminRevoked !== true,
     isActive,
+    onboardingComplete,
   };
 }
