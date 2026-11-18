@@ -22,3 +22,11 @@ firestore-debug.log
 # IDE
 .vscode/
 .idea/
+
+# Firebase identity exports and credentials
+users.json
+*-auth-export.json
+auth-export*.json
+firebase-export-*/
+firebase-export-metadata.json
+*serviceAccount*.json
