@@ -26,6 +26,8 @@ firestore-debug.log
 
 # Local Firebase exports and credentials
 users.json
+*-auth-export.json
+auth-export*.json
 firebase-export-*/
 firebase-export-metadata.json
 *serviceAccount*.json
